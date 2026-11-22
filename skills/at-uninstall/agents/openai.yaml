@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_uninstall"
+  short_description: "从当前 Agent 注销 AgentTeam 系列技能，逐名核验并保留下载仓库。"
+  default_prompt: "请用 $at-uninstall 从当前 Agent 卸载 AgentTeam，并逐项报告技能清单中的检查结果。"

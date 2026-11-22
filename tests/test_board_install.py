@@ -31,10 +31,10 @@ class BoardInstallation(unittest.TestCase):
 
     def test_installed_runtime_is_complete_and_repeatable(self):
         self.install()
-        self.assertEqual(len(list(self.dest.glob("at-*/SKILL.md"))), 13)
+        self.assertEqual(len(list(self.dest.glob("at-*/SKILL.md"))), 14)
         cli = self.dest / "at-init-team/scripts/at.py"
         output = subprocess.check_output([sys.executable, "-B", str(cli), "help", "--root", str(self.base)])
-        self.assertEqual(len(json.loads(output)["result"]["catalog"]), 13)
+        self.assertEqual(len(json.loads(output)["result"]["catalog"]), 14)
         self.assertTrue((self.board / "package-lock.json").is_file())
         self.assertTrue((self.board / "src/App.vue").is_file())
         self.assertTrue((self.board / "server/start.mjs").is_file())

@@ -14,7 +14,15 @@ cd AgentTeamSkill
 python install.py
 ```
 
-安装器将 13 个技能复制到 `$CODEX_HOME/skills`，未设置该变量时使用 `~/.codex/skills`，同时为看板技能复制运行所需的源码。需要安装到指定位置时，运行 `python install.py --dest "D:\指定目录\skills"`。更新时在克隆目录运行 `git pull --ff-only`，再运行同一安装命令。安装器会指出安装副本中与源码冲突的改动，便于先合并再更新。
+安装器将 14 个技能复制到 `$CODEX_HOME/skills`，未设置该变量时使用 `~/.codex/skills`，同时为看板技能复制运行所需的源码。需要安装到指定位置时，运行 `python install.py --dest "D:\指定目录\skills"`。更新时在克隆目录运行 `git pull --ff-only`，再运行同一安装命令。安装器会指出安装副本中与源码冲突的改动，便于先合并再更新。
+
+## 从 Agent 卸载
+
+在 Codex 输入 `$at-uninstall`，在 DeepSeek Harness 输入 `/at-uninstall`。若要将这套技能安装到 Harness 私有用户目录，可用 `python install.py --dest "$env:USERPROFILE\.dsh\skills"`；自定义 DSH_HOME 时改用其 skills 子目录。
+
+卸载默认只处理当前宿主。Agent 会先列出全部 14 项，解除实际注册入口，最后注销卸载技能自身，再逐名报告原宿主清单的查询结果。下载的 Git 仓库、项目和看板运行资源可继续保留。重新安装时运行原安装命令。
+
+旧版安装中没有卸载技能时，可以更新下载仓库，让当前 Agent 直接读取并遵循[卸载技能说明](skills/at-uninstall/SKILL.md)，用同一份清单核验旧版实际安装的项目。
 
 ## 从空目录开始
 
@@ -41,6 +49,7 @@ python install.py
 | [`$at-manage-library`](skills/at-manage-library/SKILL.md) | 在角色的 Obsidian 目录中沉淀可复用的解法和设计依据 | 经验值得在后续任务中检索 |
 | [`$at-publish`](skills/at-publish/SKILL.md) | 核查发布资格，生成 Windows 程序包、离线用户指南或甲方总览 | 阶段汇报、正式交付或同版本修订 |
 | [`$at-start-board`](skills/at-start-board/SKILL.md) | 启动本地看板、打开浏览器并创建 AgentTeamBoard 桌面快捷方式 | 查看团队全局进度、角色档案或报告 |
+| [`$at-uninstall`](skills/at-uninstall/SKILL.md) | 从当前 Codex 或 DeepSeek Harness 解除全系列注册，并逐项验证技能名已消失 | 卸载本套技能并保留源码和项目 |
 
 ## 项目文件放在哪里
 
@@ -64,7 +73,7 @@ Obsidian 笔记位于所选库的 `<项目名>/AT_<角色名>/`。团队代码�
 
 ## 在另一台 Windows 设备验证
 
-1. 完成安装，在 Codex 的新会话调用 `$at-help`。在空目录应看到 13 项技能，首选为初始化。在已有项目的角色目录中，应看到与该角色有关的下一步。
+1. 完成安装，在 Codex 的新会话调用 `$at-help`。在空目录应看到 14 项技能，首选为初始化。在已有项目的角色目录中，应看到与该角色有关的下一步。
 2. 选择一个测试项目，输入 `$at-update-team-member 给项目负责人增加每周五汇总风险的职责`。检查返回的差异、该角色的 `Agent.md` 和本地 Git 提交。
 3. 调用 `$at-start-board`。首次启动会安装依赖并构建前端。浏览器打开 [本机看板](http://127.0.0.1:47361) 后，点击“添加项目”或“选择项目文件夹”，选择含 `AT.json` 的目录，检查四列需求、角色档案和报告。
 4. 确认桌面上出现 **AgentTeamBoard**。再次调用技能或双击快捷方式应打开同一个服务。重启 Windows 后再次双击，应能重新启动服务并看到之前登记的项目。项目列表与启动日志保存在 `%LOCALAPPDATA%\AgentTeamBoard`。
@@ -84,4 +93,13 @@ npm run build
 ```powershell
 $env:AT_TEST_BOARD_START = "1"
 python -B -m unittest discover -s tests -p test_board_install.py -v
+```
+
+卸载集成测试使用临时宿主配置目录。Codex 测试需要 PATH 中的 `codex`。要同时运行 DeepSeek Harness 的实时注册表测试，可将官方包安装到临时目录后执行：
+
+```powershell
+$dshTest = Join-Path $env:TEMP ("at-dsh-test-" + [guid]::NewGuid())
+npm install --prefix $dshTest --cache "$dshTest/npm-cache" --ignore-scripts @deepseek-ai/dsh-skill@0.2.2-rc.5 @deepseek-ai/dsh-skill-filesystem@0.2.2-rc.5
+$env:AT_TEST_DSH_MODULES = Join-Path $dshTest "node_modules"
+python -B -m unittest discover -s tests -p test_uninstall.py -v
 ```

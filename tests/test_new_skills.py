@@ -10,7 +10,7 @@ class HelpAndProfiles(ProjectFixture):
     def test_empty_occupied_and_invalid(self):
         empty = self.cli("help")
         self.assertEqual(empty["recommendation"]["skill"], "at-init-team")
-        self.assertEqual(len(empty["catalog"]), 13)
+        self.assertEqual(len(empty["catalog"]), 14)
         self.assertEqual(list(self.root.iterdir()), [])
         (self.root / ".hidden").touch()
         self.assertEqual(self.cli("help")["status"], "outside")
