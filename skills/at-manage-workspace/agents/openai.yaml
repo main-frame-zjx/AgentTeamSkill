@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_manage_workspace"
+  short_description: "通过脚本追加需求变更和流转证据，保存每次退回及重新送验的历史。"
+  default_prompt: "请用 $at-manage-workspace 查看或流转指定需求。"

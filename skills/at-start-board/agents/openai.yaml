@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_start_board"
+  short_description: "在 Windows 启动本地团队看板，并创建可重启服务的桌面快捷方式。"
+  default_prompt: "请用 $at-start-board 打开本机 Agent Team 看板并创建桌面快捷方式。"

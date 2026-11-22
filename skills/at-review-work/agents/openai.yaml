@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_review_work"
+  short_description: "按需求验收条件核验实际交付版本，记录证据并归档或退回返工。"
+  default_prompt: "请用 $at-review-work 验收指定的待验收需求。"

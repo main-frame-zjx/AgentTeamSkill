@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_manage_library"
+  short_description: "检索并维护角色的 Obsidian 知识库，沉淀设计依据及可复用经验。"
+  default_prompt: "请用 $at-manage-library 把本轮可复用的结论整理到角色知识库。"

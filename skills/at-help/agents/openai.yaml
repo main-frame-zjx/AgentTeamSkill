@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_help"
+  short_description: "列出 Agent Team 技能，根据当前项目、角色和需求推荐下一步。"
+  default_prompt: "请用 $at-help 列出技能，并根据当前项目推荐下一步。"

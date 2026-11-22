@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+.agentteam-install.json
+node_modules/
+dist/

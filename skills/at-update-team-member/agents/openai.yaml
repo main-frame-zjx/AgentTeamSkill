@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_update_team_member"
+  short_description: "根据明确指令迭代已登记角色的行为设定、工作重点和日常流程。"
+  default_prompt: "请用 $at-update-team-member 根据我的要求更新指定角色的档案。"

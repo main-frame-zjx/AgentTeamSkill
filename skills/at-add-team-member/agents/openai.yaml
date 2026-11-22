@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_add_team_member"
+  short_description: "逐轮确认角色的做事方式、工作重点和日常流程，再按用户的设定创建成员。"
+  default_prompt: "请用 $at-add-team-member 引导我设定一位新角色，先问我是否认可候选行为，等我确认完整设定后再创建。"

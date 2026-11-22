@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_publish"
+  short_description: "按版本和修订交付可迁移的 Windows 程序包、用户指南或甲方项目总览。"
+  default_prompt: "请用 $at-publish 让我选择本次发布的类型，并交付当前版本的成果。"

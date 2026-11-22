@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_team_discuss"
+  short_description: "在 Ultra 模式主持至少 10 轮全员磋商，记录用户裁决及行动项。"
+  default_prompt: "请用 $at-team-discuss 召开多角色会议，并把议定事项分派给各角色。"

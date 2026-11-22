@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_add_worklist"
+  short_description: "按角色分派需求，用角色前缀、五位流水号和中文概括生成文件名。"
+  default_prompt: "请用 $at-add-worklist 把这些需求加入指定角色的新需求目录。"

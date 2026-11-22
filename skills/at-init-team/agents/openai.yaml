@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_init_team"
+  short_description: "在空目录建立团队项目、连接 GitHub 共享仓库并准备本地发布目录。"
+  default_prompt: "请用 $at-init-team 在当前空目录创建 Agent Team 项目。"
