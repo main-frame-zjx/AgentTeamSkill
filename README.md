@@ -2,9 +2,17 @@
 
 AgentTeamSkill 是一组给 Codex 使用的中文技能，适合需要多个角色共同交付的项目。以坦克游戏为例，策划、工程师和美术可以在项目负责人主持的会议中议定“坦克撞墙后仍可沿墙转向”，把决议分派成带验收条件的需求。工程师在自己的 Git 工作树中实现并测试，验收人按条件检查，负责人从已验收的成果制作版本交付。每份需求都能追溯到执行角色、状态变化和交付证据。
 
+## 用 Obsidian 管理角色记忆
+
+AgentTeam 会把角色记忆持久化到本地。每个角色用自己仓库中的 `Memory.md` 记录当前进展、待解决的问题和下一步，方便下次开工时接续。值得长期复用的设计依据、解决方案和经验，则由 `$at-manage-library` 整理成 Markdown 笔记，保存在 Obsidian 笔记库中，按项目和角色归档。
+
+推荐安装 Obsidian 桌面应用，在项目目录之外创建或选择一个笔记库（vault）。运行 `$at-init-team` 时指定这个库，之后就可以在 Obsidian 中查看和检索各角色积累的知识。[Obsidian 官网](https://obsidian.md/)
+
+如果使用 Codex（ChatGPT），还推荐在 Codex 或 ChatGPT 桌面应用的插件目录中安装 **Obsidian** 插件，方便让 Agent 搜索、阅读和整理本地角色笔记。[Obsidian 插件页面](https://chatgpt.com/plugins/plugins_6aee4fde227881919d61b034b1c31096)
+
 ## 在 Windows 上安装
 
-准备好 Codex、Python 3.11 或更新版本，以及已配置提交身份的 Git。创建团队项目时还需要一个项目目录外的 Obsidian 库，以及可访问并推送的团队 Git 仓库。使用看板的设备还需要 Node.js 22.12 或更新版本和 npm，首次启动需能下载锁定的依赖。
+准备好 Codex、Python 3.11 或更新版本，以及已配置提交身份的 Git。创建团队项目时还需要可访问并推送的团队 Git 仓库。使用看板的设备还需要 Node.js 22.12 或更新版本和 npm，首次启动需能下载锁定的依赖。
 
 在 PowerShell 中克隆本仓库并运行安装器。
 
