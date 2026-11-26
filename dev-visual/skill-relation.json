@@ -1,0 +1,195 @@
+{
+  "categories": [
+    "项目初始化",
+    "项目成员管理",
+    "成员个人技能",
+    "需求与验收",
+    "团队会议",
+    "项目发布",
+    "辅助功能"
+  ],
+  "skills": [
+    {
+      "name": "at-init-team",
+      "description": "在空目录建立 Agent Team 项目和 GitHub 团队仓库，生成 AT.json、公共资源区和发布目录。",
+      "document": "at-init-team/SKILL.md",
+      "category": "项目初始化",
+      "next": [
+        {
+          "target": "at-add-team-member",
+          "evidence": [
+            {
+              "condition": "完成项目初始化并核对结果后，可添加团队成员。",
+              "source": "at-init-team/SKILL.md",
+              "quote": "下一步可调用 `$at-add-team-member`。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "at-add-team-member",
+      "description": "在 Agent Team 项目通过逐轮访谈新增角色。只有岗位名时，先让用户选择是否认可候选行为，再补齐工作重点与工作流，按用户确认的设定创建成员。",
+      "document": "at-add-team-member/SKILL.md",
+      "category": "项目成员管理",
+      "next": []
+    },
+    {
+      "name": "at-update-team-member",
+      "description": "根据用户输入局部更新已登记角色的 Agent.md，调整人设、工作重点或常规工作流，并提交到该角色自己的本地 Git 仓库。",
+      "document": "at-update-team-member/SKILL.md",
+      "category": "项目成员管理",
+      "next": []
+    },
+    {
+      "name": "at-work",
+      "description": "让某个 Agent Team 角色从新需求或处理中任务开始或继续工作，完成验证、Git 交付及个人记忆整理。",
+      "document": "at-work/SKILL.md",
+      "category": "成员个人技能",
+      "next": [
+        {
+          "target": "at-manage-workspace",
+          "evidence": [
+            {
+              "condition": "开始处理需求时。",
+              "source": "at-work/SKILL.md",
+              "quote": "调用 `$at-manage-workspace` 开始任务。"
+            },
+            {
+              "condition": "核实交付成功后，将需求移至待验收。",
+              "source": "at-work/SKILL.md",
+              "quote": "核实交付成功后调用 `$at-manage-workspace` 移至待验收，附实际测试、提交 SHA、交付物相对路径。"
+            }
+          ]
+        },
+        {
+          "target": "at-publish",
+          "evidence": [
+            {
+              "condition": "管理角色交付版本程序包、用户指南或甲方总览时。",
+              "source": "at-work/SKILL.md",
+              "quote": "管理角色通过 `$at-publish` 交付版本程序包、用户指南或迭代中的甲方总览。"
+            }
+          ]
+        },
+        {
+          "target": "at-manage-memory",
+          "evidence": [
+            {
+              "condition": "本轮完成后，先整理角色记忆。",
+              "source": "at-work/SKILL.md",
+              "quote": "完成本轮后依次调用 `$at-manage-memory`、`$at-manage-library`；即使无新知识也评估一次。"
+            }
+          ]
+        },
+        {
+          "target": "at-manage-library",
+          "evidence": [
+            {
+              "condition": "整理角色记忆后评估知识库，即使没有新知识也要评估。",
+              "source": "at-work/SKILL.md",
+              "quote": "完成本轮后依次调用 `$at-manage-memory`、`$at-manage-library`；即使无新知识也评估一次。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "at-manage-memory",
+      "description": "根据角色的最新项目进展提炼 Memory.md，供下一次开工快速恢复中长期上下文。",
+      "document": "at-manage-memory/SKILL.md",
+      "category": "成员个人技能",
+      "next": []
+    },
+    {
+      "name": "at-manage-library",
+      "description": "在 Obsidian 中维护 Agent Team 角色个人知识库，沉淀可复用的方法、设计依据和问题解法。",
+      "document": "at-manage-library/SKILL.md",
+      "category": "成员个人技能",
+      "next": []
+    },
+    {
+      "name": "at-add-worklist",
+      "description": "把用户或会议议定的需求分派到已注册角色，一条或批量生成可追溯的需求 Markdown。",
+      "document": "at-add-worklist/SKILL.md",
+      "category": "需求与验收",
+      "next": [
+        {
+          "target": "at-manage-workspace",
+          "evidence": [
+            {
+              "condition": "需要补充或修改已有需求时。",
+              "source": "at-add-worklist/SKILL.md",
+              "quote": "已有需求的补充或修改请使用 `$at-manage-workspace`。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "at-manage-workspace",
+      "description": "查看和维护 Agent Team 需求文件，追加说明、修订验收条件，并在四个任务状态间流转。",
+      "document": "at-manage-workspace/SKILL.md",
+      "category": "需求与验收",
+      "next": []
+    },
+    {
+      "name": "at-review-work",
+      "description": "由项目负责人或指定验收人核验待验收交付物，记录逐项证据，将需求归档或退回。",
+      "document": "at-review-work/SKILL.md",
+      "category": "需求与验收",
+      "next": [
+        {
+          "target": "at-manage-workspace",
+          "evidence": [
+            {
+              "condition": "需要按用户指示变更验收人时。",
+              "source": "at-review-work/SKILL.md",
+              "quote": "需要变更验收人时按用户指示调用 `$at-manage-workspace` 追加修订。"
+            },
+            {
+              "condition": "全部验收条件达到时，将需求归档。",
+              "source": "at-review-work/SKILL.md",
+              "quote": "全部达到验收条件，调用 `$at-manage-workspace` 从 `3待验收` 转入 `4已归档`。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "at-team-discuss",
+      "description": "在 Ultra 模式下组织 Agent Team 真实多角色会议，完成至少 10 轮全员磋商、征求重大决策意见并自动分派需求。",
+      "document": "at-team-discuss/SKILL.md",
+      "category": "团队会议",
+      "next": []
+    },
+    {
+      "name": "at-publish",
+      "description": "由 Agent Team 的项目负责人或获授权的管理角色按版本发布可迁移的 Windows 程序包、面向用户的离线使用指南，或迭代中的甲方项目总览，支持同版本独立修订。",
+      "document": "at-publish/SKILL.md",
+      "category": "项目发布",
+      "next": []
+    },
+    {
+      "name": "at-start-board",
+      "description": "在 Windows 优先复用桌面快捷方式打开 AgentTeam 项目看板和技能手册。首次使用、入口缺失或打开失败时，检查并补齐依赖，生成或修复两个看板和停止服务的三个桌面快捷方式。",
+      "document": "at-start-board/SKILL.md",
+      "category": "辅助功能",
+      "next": []
+    },
+    {
+      "name": "at-help",
+      "description": "列出 Agent Team 全系列技能，并根据当前目录、登记角色、需求状态和用户目标推荐下一步。适用于初次使用或询问项目接下来该做什么。",
+      "document": "at-help/SKILL.md",
+      "category": "辅助功能",
+      "next": []
+    },
+    {
+      "name": "at-uninstall",
+      "description": "从当前 Codex 或 DeepSeek Harness 注销 AgentTeam 全系列技能，刷新宿主清单逐名验收，包括卸载自身。用户明确要卸载本套技能时使用。",
+      "document": "at-uninstall/SKILL.md",
+      "category": "辅助功能",
+      "next": []
+    }
+  ]
+}

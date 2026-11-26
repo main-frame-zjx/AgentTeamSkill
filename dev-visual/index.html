@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>技能手册 · AgentTeam</title>
+  <link rel="icon" href="/mark.svg">
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/vendor/markdown-it.min.js"></script>
+  <script type="module" src="/reader.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="AgentTeam 技能手册首页"><img src="/mark.svg" alt="">AgentTeam</a>
+    <span class="app-title">开发者手册</span>
+    <span class="readonly"><i></i>只读浏览</span>
+  </header>
+  <div class="layout">
+    <aside id="sidebar">
+      <div class="nav-heading"><h2>技能目录</h2><span id="total"></span><button id="mobile-toggle" aria-controls="directory" aria-expanded="false">展开目录</button></div>
+      <div id="directory">
+        <label class="search"><span aria-hidden="true"></span><input type="search" id="search" placeholder="查找技能…" aria-label="按名称、分类、简介或正文查找技能"></label>
+        <p id="index-warning" class="notice" hidden></p>
+        <nav id="navigation" aria-label="分类技能目录"></nav>
+      </div>
+    </aside>
+    <main id="main" tabindex="-1">
+      <div id="page" aria-live="polite">正在读取技能手册…</div>
+    </main>
+  </div>
+</body>
+</html>

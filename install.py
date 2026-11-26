@@ -57,7 +57,10 @@ def install(dest):
                     raise ValueError(f"全局副本已被独立修改，先合并到源文件 {path}")
         plans.append((target, files, hashes, previous))
     for target, files, hashes, previous in plans:
-        manifest_bytes = json.dumps({"files": hashes}, indent=2).encode("utf-8")
+        metadata = {"files": hashes}
+        if target.name == "at-start-board":
+            metadata["source_root"] = str(SOURCE.parent)
+        manifest_bytes = json.dumps(metadata, indent=2).encode("utf-8")
         if not target.exists():
             with tempfile.TemporaryDirectory(dir=dest, prefix=".at-install-") as tmp:
                 ready = Path(tmp) / target.name
@@ -73,7 +76,8 @@ def install(dest):
                 replace(path, blob)
         for name in previous.keys() - files.keys():
             (target / name).unlink(missing_ok=True)
-        replace(target / OWNER, manifest_bytes)
+        if (target / OWNER).read_bytes() != manifest_bytes:
+            replace(target / OWNER, manifest_bytes)
         print(target)
 
 

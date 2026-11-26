@@ -2,19 +2,9 @@
 
 AgentTeamSkill 是一组给 Codex 使用的中文技能，适合需要多个角色共同交付的项目。以坦克游戏为例，策划、工程师和美术可以在项目负责人主持的会议中议定“坦克撞墙后仍可沿墙转向”，把决议分派成带验收条件的需求。工程师在自己的 Git 工作树中实现并测试，验收人按条件检查，负责人从已验收的成果制作版本交付。每份需求都能追溯到执行角色、状态变化和交付证据。
 
-## 用 Obsidian 管理角色记忆
+## 在 Windows 上获取 14 个技能和两个看板
 
-AgentTeam 会把角色记忆持久化到本地。每个角色用自己仓库中的 `Memory.md` 记录当前进展、待解决的问题和下一步，方便下次开工时接续。值得长期复用的设计依据、解决方案和经验，则由 `$at-manage-library` 整理成 Markdown 笔记，保存在 Obsidian 笔记库中，按项目和角色归档。
-
-推荐安装 Obsidian 桌面应用，在项目目录之外创建或选择一个笔记库（vault）。运行 `$at-init-team` 时指定这个库，之后就可以在 Obsidian 中查看和检索各角色积累的知识。[Obsidian 官网](https://obsidian.md/)
-
-如果使用 Codex（ChatGPT），还推荐在 Codex 或 ChatGPT 桌面应用的插件目录中安装 **Obsidian** 插件，方便让 Agent 搜索、阅读和整理本地角色笔记。[Obsidian 插件页面](https://chatgpt.com/plugins/plugins_6aee4fde227881919d61b034b1c31096)
-
-## 在 Windows 上安装
-
-准备好 Codex、Python 3.11 或更新版本，以及已配置提交身份的 Git。创建团队项目时还需要可访问并推送的团队 Git 仓库。使用看板的设备还需要 Node.js 22.12 或更新版本和 npm，首次启动需能下载锁定的依赖。
-
-在 PowerShell 中克隆本仓库并运行安装器。
+准备好 Git 和 Python 3.11 或更新版本，在 PowerShell 中克隆仓库并为 Codex 安装技能。项目看板另需 Node.js 22.12 或更新版本和 npm，首次启动会联网下载依赖并构建页面。单独浏览技能手册只需 Python。
 
 ```powershell
 git clone https://github.com/main-frame-zjx/AgentTeamSkill.git
@@ -22,7 +12,23 @@ cd AgentTeamSkill
 python install.py
 ```
 
-安装器将 14 个技能复制到 `$CODEX_HOME/skills`，未设置该变量时使用 `~/.codex/skills`，同时为看板技能复制运行所需的源码。需要安装到指定位置时，运行 `python install.py --dest "D:\指定目录\skills"`。更新时在克隆目录运行 `git pull --ff-only`，再运行同一安装命令。安装器会指出安装副本中与源码冲突的改动，便于先合并再更新。
+安装后，在新的 Codex 会话输入 `$at-help` 查看技能，或输入 `$at-start-board` 打开两个看板。首次设置会创建三个桌面快捷方式。请保留克隆目录，快捷方式和技能手册都从这里读取文件。
+
+| 要做什么 | 桌面快捷方式 | 直接从仓库启动 |
+| --- | --- | --- |
+| 按分类查阅技能原文和后续调用 | `AgentTeam 技能看板` | 双击 [dev-visual/打开技能手册.bat](dev-visual/打开技能手册.bat)，默认端口为 8764 |
+| 查看需求、角色和报告 | `Agent Team Board` | 双击 [board/启动看板.bat](board/启动看板.bat)，默认端口为 47361。打开后选择含 `AT.json` 的项目目录 |
+| 关闭两个后台服务 | `AgentTeamStopService` | 双击 [tools/windows/AgentTeamStopService.exe](tools/windows/AgentTeamStopService.exe) 停止默认端口上的服务 |
+
+只想浏览看板时，可在克隆后直接使用表中的仓库入口。要更新技能，在克隆目录运行 `git pull --ff-only`，再运行 `python install.py`。安装器默认使用 `$CODEX_HOME/skills`，未设置该变量时使用 `~/.codex/skills`。自定义安装位置使用 `python install.py --dest "D:\指定目录\skills"`，更新时沿用同一命令。
+
+## 用 Obsidian 管理角色记忆
+
+AgentTeam 会把角色记忆持久化到本地。每个角色用自己仓库中的 `Memory.md` 记录当前进展、待解决的问题和下一步，方便下次开工时接续。值得长期复用的设计依据、解决方案和经验，则由 `$at-manage-library` 整理成 Markdown 笔记，保存在 Obsidian 笔记库中，按项目和角色归档。
+
+推荐安装 Obsidian 桌面应用，在项目目录之外创建或选择一个笔记库（vault）。运行 `$at-init-team` 时指定这个库，之后就可以在 Obsidian 中查看和检索各角色积累的知识。[Obsidian 官网](https://obsidian.md/)
+
+如果使用 Codex（ChatGPT），还推荐在 Codex 或 ChatGPT 桌面应用的插件目录中安装 **Obsidian** 插件，方便让 Agent 搜索、阅读和整理本地角色笔记。[Obsidian 插件页面](https://chatgpt.com/plugins/plugins_6aee4fde227881919d61b034b1c31096)
 
 ## 从 Agent 卸载
 
@@ -34,6 +40,8 @@ python install.py
 
 ## 从空目录开始
 
+创建团队项目前，请先配置 Git 提交身份，并准备好可访问和推送的团队 Git 仓库。
+
 1. 在 Codex 中打开**另一个空目录**作为项目目录，输入 `$at-help 我应该从哪里开始？`。它会列出技能，并根据当前位置推荐下一步。
 2. 调用 `$at-init-team`，给出项目名、Obsidian 库和团队代码仓库地址。为团队选择它自己的 Git 仓库。初始化完成后，项目根目录下会出现 `AT.json`。
 3. 用 `$at-add-team-member` 建立项目负责人和执行角色。例如输入“添加一位负责碰撞和移动的客户端工程师”，逐轮确定角色的做事方式、工作重点和日常流程。
@@ -41,6 +49,10 @@ python install.py
 5. 用 `$at-work` 让需求所属角色开工，用 `$at-review-work` 验收。需要发布时，由负责人或已获授权的管理角色调用 `$at-publish`。
 
 ## 技能目录
+
+开发者可在 Windows 双击[打开技能手册](dev-visual/打开技能手册.bat)，用 Python 离线浏览。每次打开或刷新页面，手册都会扫描 `skills/*/SKILL.md`，读取最新的名称、简介和正文，可按正文关键词搜索。新技能出现在侧栏末尾的“未分类”，可以直接打开或分享本机链接。删除技能后刷新，目录和页底跳转会同步移除该项。
+
+需要整理分类、阅读顺序或更新后续调用及原文依据时，在开发仓库中运行 [`$update-skills-relation`](.agents/skills/update-skills-relation/SKILL.md) 重建[关系索引](dev-visual/skill-relation.json)，再刷新页面。
 
 | 调用名 | 具体用途 | 何时使用 |
 |---|---|---|
@@ -56,7 +68,7 @@ python install.py
 | [`$at-manage-memory`](skills/at-manage-memory/SKILL.md) | 更新角色的 Memory.md，保留恢复工作所需的上下文 | 交接阶段进展或整理下一轮工作起点 |
 | [`$at-manage-library`](skills/at-manage-library/SKILL.md) | 在角色的 Obsidian 目录中沉淀可复用的解法和设计依据 | 经验值得在后续任务中检索 |
 | [`$at-publish`](skills/at-publish/SKILL.md) | 核查发布资格，生成 Windows 程序包、离线用户指南或甲方总览 | 阶段汇报、正式交付或同版本修订 |
-| [`$at-start-board`](skills/at-start-board/SKILL.md) | 启动本地看板、打开浏览器并创建 AgentTeamBoard 桌面快捷方式 | 查看团队全局进度、角色档案或报告 |
+| [`$at-start-board`](skills/at-start-board/SKILL.md) | 创建三个桌面入口，在浏览器打开项目看板和技能手册 | 查看团队进度、角色报告或技能文档 |
 | [`$at-uninstall`](skills/at-uninstall/SKILL.md) | 从当前 Codex 或 DeepSeek Harness 解除全系列注册，并逐项验证技能名已消失 | 卸载本套技能并保留源码和项目 |
 
 ## 项目文件放在哪里
@@ -83,17 +95,23 @@ Obsidian 笔记位于所选库的 `<项目名>/AT_<角色名>/`。团队代码�
 
 1. 完成安装，在 Codex 的新会话调用 `$at-help`。在空目录应看到 14 项技能，首选为初始化。在已有项目的角色目录中，应看到与该角色有关的下一步。
 2. 选择一个测试项目，输入 `$at-update-team-member 给项目负责人增加每周五汇总风险的职责`。检查返回的差异、该角色的 `Agent.md` 和本地 Git 提交。
-3. 调用 `$at-start-board`。首次启动会安装依赖并构建前端。浏览器打开 [本机看板](http://127.0.0.1:47361) 后，点击“添加项目”或“选择项目文件夹”，选择含 `AT.json` 的目录，检查四列需求、角色档案和报告。
-4. 确认桌面上出现 **AgentTeamBoard**。再次调用技能或双击快捷方式应打开同一个服务。重启 Windows 后再次双击，应能重新启动服务并看到之前登记的项目。项目列表与启动日志保存在 `%LOCALAPPDATA%\AgentTeamBoard`。
+3. 调用 `$at-start-board`，浏览器会分别打开[项目看板](http://127.0.0.1:47361)和[技能手册](http://127.0.0.1:8764)。项目看板首次启动会安装依赖并构建前端。在项目看板选择含 `AT.json` 的项目目录，即可查看需求、角色和报告。手册读取安装来源仓库的最新技能文档。
+4. 桌面的 **Agent Team Board** 和 **AgentTeam 技能看板** 分别打开对应页面，**AgentTeamStopService** 关闭这两个后台服务。三个快捷方式直接指向来源仓库 `tools/windows/` 中的无控制台 EXE，图标来自同目录的 `icons/`。仓库搬迁后，从新位置再次运行 `python install.py`，再调用技能即可重建入口。项目列表与启动日志保存在 `%LOCALAPPDATA%\AgentTeamBoard`。
+
+只需创建或修复桌面入口时，可独立运行 [set-desktop-shortcuts.ps1](tools/windows/set-desktop-shortcuts.ps1)。修改启动器源码或图标后，用 [build-launchers.ps1](tools/windows/build-launchers.ps1) 重新编译三个 EXE。
 
 ## 在源码仓库运行测试
 
+在仓库根目录运行。技能手册的索引测试还需 PyYAML，可用 `python -m pip install PyYAML` 安装。
+
 ```powershell
 python -B -m unittest discover -s tests -v
+python -B -m unittest discover -s dev-visual/tests -v
+node --test dev-visual/tests/catalog.test.mjs
 cd board
-npm ci
-npm test
-npm run build
+npm.cmd ci --cache "$env:LOCALAPPDATA\npm-cache"
+npm.cmd test
+npm.cmd run build
 ```
 
 在 Windows 上，可从源码仓库根目录运行下列冷启动测试。它把技能装到临时中文路径，使用临时桌面、独立端口和临时看板配置，覆盖首次安装依赖、快捷方式重启、重复调用和端口冲突。
