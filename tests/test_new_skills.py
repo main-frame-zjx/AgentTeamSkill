@@ -10,7 +10,7 @@ class HelpAndProfiles(ProjectFixture):
     def test_empty_occupied_and_invalid(self):
         empty = self.cli("help")
         self.assertEqual(empty["recommendation"]["skill"], "at-init-team")
-        self.assertEqual(len(empty["catalog"]), 14)
+        self.assertEqual(len(empty["catalog"]), 16)
         self.assertEqual(list(self.root.iterdir()), [])
         (self.root / ".hidden").touch()
         self.assertEqual(self.cli("help")["status"], "outside")
@@ -18,7 +18,12 @@ class HelpAndProfiles(ProjectFixture):
         manifest.write_text("{", encoding="utf-8")
         invalid = self.cli("help")
         self.assertEqual((invalid["status"], invalid["path"]), ("invalid", str(manifest)))
-        manifest.write_text(json.dumps({"format": "agent-team/v2", "name": "缺少仓库", "members": []}))
+        manifest.write_text(json.dumps({"format": "unsupported"}))
+        self.assertIn("at-init-team", self.cli("project", fail=True))
+        invalid = self.cli("help")
+        self.assertIn("at-init-team", invalid["error"])
+        self.assertEqual(invalid["recommendation"]["skill"], "at-init-team")
+        manifest.write_text(json.dumps({"format": "agent-team/v3", "name": "缺少仓库", "members": []}))
         self.assertEqual(self.cli("help")["status"], "invalid")
         self.assertFalse((self.root / ".at-state").exists())
 
@@ -49,19 +54,19 @@ class HelpAndProfiles(ProjectFixture):
         self.assertEqual(scoped["current_role"], dev)
         self.assertIn(spare["id"], scoped["recommendation"]["example"])
         self.assertIn(job["id"], help_for(self.root / ("AT_" + lead))["recommendation"]["example"])
-        # A legacy filename with an interrupted move must not get silently renamed by help.
+        # A task with an interrupted move must not get silently renamed by help.
         old_dir = directory / "workspace" / ACTIVE
         moved = Path(submitted["path"])
-        legacy = old_dir / (job["id"] + ".md")
-        moved.rename(legacy)
+        interrupted = old_dir / moved.name
+        moved.rename(interrupted)
         snapshot = lambda: {p: hashlib.sha256(p.read_bytes()).digest() for p in self.root.rglob("*")
                             if p.is_file() and ".git" not in p.parts}
         before = snapshot()
         invalid = help_for()
         self.assertEqual(invalid["status"], "invalid")
-        self.assertIn(str(legacy), invalid["error"])
+        self.assertIn(str(interrupted), invalid["error"])
         self.assertEqual(before, snapshot())
-        legacy.rename(moved.with_name(legacy.name))
+        interrupted.rename(moved)
         valid = snapshot()
         self.assertEqual(help_for()["counts"][REVIEW], 1)
         self.assertEqual(valid, snapshot())
@@ -72,6 +77,24 @@ class HelpAndProfiles(ProjectFixture):
         self.assertEqual(help_for()["recommendation"]["skill"], "at-publish")
         (self.root / ".at-state/releases.json").write_text(json.dumps([{"kind":"bin", "version":"v1.0"}]))
         self.assertEqual(help_for()["recommendation"]["skill"], "at-team-discuss")
+
+    def test_planning_after_archived_iteration(self):
+        self.make_project_fixture()
+        lead = "项目负责人"
+        self.cli("add-member", self.role(lead))
+        job = self.cli("add-tasks", {"items": [{"key": "first", "role": lead, "prefix": "PM", "title": "准备教程",
+                       "goal": "完成教程", "criteria": ["可运行"]}]})[0]
+        for before, after in [(NEW, ACTIVE), (ACTIVE, REVIEW), (REVIEW, DONE)]:
+            self.cli("move", {"role": lead, "actor": lead, "id": job["id"], "key": before,
+                              "from": before, "to": after, "reason": "已核对", "evidence": ["教程可运行"]})
+        self.cli("set-iteration", {"version": "v1.1"})
+        single = self.cli("help")["recommendation"]
+        self.assertEqual(single["skill"], "at-add-worklist")
+        self.assertIn("v1.1", single["example"])
+        self.cli("add-member", self.role("美术"))
+        team = self.cli("help")["recommendation"]
+        self.assertEqual(team["skill"], "at-team-discuss")
+        self.assertIn("v1.1", team["example"])
 
     def test_update_preserves_custom_text_and_recovers_failed_commit(self):
         self.make_project_fixture()

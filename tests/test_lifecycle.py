@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import uuid
 
 
 CLI = Path(os.environ.get("AT_TEST_CLI") or Path(__file__).resolve().parents[1] /
@@ -82,22 +81,14 @@ class ProjectFixture(unittest.TestCase):
         return {"name": name, "persona": name + "负责本专业", "focus": ["实现交付"], "workflow": ["阅读需求", "验证交付"]}
 
     def make_project_fixture(self):
-        """Build the post-init layout directly, inside an unrelated parent repository."""
+        """Initialize a project, inside an unrelated parent repository."""
         self.git(self.base, "init", "-b", "main")
         self.git(self.base, "commit", "--allow-empty", "-m", "Parent baseline")
         (self.base / "unrelated.txt").write_text("staged by someone else", encoding="utf-8")
         self.git(self.base, "add", "unrelated.txt")
         self.parent_head = self.git(self.base, "rev-parse", "HEAD")
         self.parent_index = self.git(self.base, "ls-files", "--stage")
-        main = self.root / "public/tank_war"
-        main.parent.mkdir()
-        self.git(self.root, "clone", self.remote, main)
-        self.git(main, "commit", "--allow-empty", "-m", "Team baseline")
-        self.git(main, "push", "-u", "origin", "main")
-        (self.root / "publish").mkdir()
-        config = {**self.init, "id": str(uuid.uuid4()), "format": "agent-team/v2",
-                  "team_repo": "public/tank_war", "current_version": "v1.0", "members": []}
-        (self.root / "AT.json").write_text(json.dumps(config), encoding="utf-8")
+        self.cli("init", self.init)
         self.addCleanup(self.check_parent_repository)
 
     def check_parent_repository(self):
@@ -116,11 +107,11 @@ class Lifecycle(ProjectFixture):
         self.assertEqual(self.git(self.remote, "for-each-ref"), "")
         self.cli("init", {**self.init, "remote": str(self.base / "missing.git")}, fail=True)
         self.assertEqual(list(self.root.iterdir()), [])
-        self.assertEqual(self.cli("init", self.init)["format"], "agent-team/v2")
+        self.assertEqual(self.cli("init", self.init)["format"], "agent-team/v3")
         self.assertEqual({p.name for p in self.root.iterdir()}, {"AT.json", "public", "publish"})
         self.assertEqual(self.cli("project")["current_version"], "v1.0")
         self.assertEqual({p.name for p in (self.root / "publish").iterdir()}, {"bin", "user", "dev"})
-        self.assertEqual({p.name for p in (self.root / "public").iterdir()}, {"tank_war"})
+        self.assertEqual({p.name for p in (self.root / "public").iterdir()}, {"tank_war", "chat"})
         self.assertEqual(self.git(self.remote, "rev-parse", "main"),
                          self.git(self.root / "public/tank_war", "rev-parse", "HEAD"))
 
@@ -208,7 +199,7 @@ class Lifecycle(ProjectFixture):
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
             first, repeated = pool.map(lambda m: self.cli("meeting", m), calls)
         self.assertEqual(first, repeated)
-        self.assertEqual(self.git(first_owner, "rev-parse", "HEAD"), partial_head)
+        self.assertEqual(self.git(first_owner, "log", "-1", "--format=%H", "--", "workspace"), partial_head)
         for item, role in zip(first["items"], roles):
             base = self.root / role["dir"]
             tracked = self.git(base, "-c", "core.quotepath=false", "ls-files", "--", "workspace")
@@ -300,17 +291,9 @@ class Lifecycle(ProjectFixture):
         self.assertEqual(len(self.cli("list", {"role": who, "stages": [NEW, ACTIVE]})), 0)
         self.assertEqual(len(self.cli("meeting", meeting)["items"]), 4)
 
-        memory = self.cli("memory", {"role": who})
-        new_memory = self.cli("memory", {"role": who, "expected_sha256": memory["sha256"], "content": "碰撞已验收"})
-        self.assertLess(new_memory["bytes"], 10240)
-        self.cli("memory", {"role": who, "expected_sha256": memory["sha256"], "content": "旧稿覆盖"}, fail=True)
-        self.assertTrue(self.cli("memory", {"role": who, "expected_sha256": new_memory["sha256"],
-                                            "content": "多" * 3500})["over_memory_target"])
-        note = {"role": who, "path": "技术/碰撞.md", "content": "四个方向均已覆盖", "expected_sha256": None}
-        self.cli("library", note)
-        self.assertEqual(self.cli("library", {"role": who, "path": note["path"]})["content"].strip(), note["content"])
-        self.cli("library", {**note, "path": "../他人.md"}, fail=True)
-        self.assertIn("多" * 3500, self.git(owner_repo, "show", "HEAD:Memory.md"))
+        handoff = self.cli("memory-read", {"role": who})
+        self.assertEqual(handoff["content"].count("\n## "), 6)
+        self.assertEqual(handoff["content"].strip(), self.git(owner_repo, "show", "HEAD:Memory.md"))
         self.assertEqual(self.git(owner_repo, "status", "--porcelain"), "")
 
     def test_task_version_from_nested_directory(self):
@@ -360,10 +343,6 @@ class Lifecycle(ProjectFixture):
         with concurrent.futures.ThreadPoolExecutor(2) as pool:
             results = list(pool.map(lambda k: add({**item, "key": k})[0]["path"], ["third", "fourth"]))
         self.assertEqual(sorted(Path(p).name[:14] for p in results), ["AT-Design00003", "AT-Design00004"])
-        # Existing UUID-named documents remain accessible by their embedded ID.
-        old_path = Path(second["path"]).with_name(second["id"] + ".md")
-        Path(second["path"]).rename(old_path)
-        self.assertEqual(self.cli("show", {"role": designer, "id": second["id"]})["path"], str(old_path))
 
     def test_offline_report(self):
         self.make_project_fixture()
@@ -372,10 +351,6 @@ class Lifecycle(ProjectFixture):
             self.cli("add-member", self.role(who))
         base = self.root / ("AT_" + role)
         self.assertEqual(self.git(base, "ls-files", "report"), "report/.gitkeep")
-        (base / "report/.gitkeep").unlink()
-        (base / "report").rmdir()
-        (base / ".gitignore").write_text("/repository/\ncustom.tmp\n", encoding="utf-8")
-        self.git(base, "commit", "-am", "Simulate pre-report layout")
         source = self.base / "report"
         source.mkdir()
         (source / "layout.css").write_text("#ok {color:green}", encoding="utf-8")
@@ -394,7 +369,6 @@ class Lifecycle(ProjectFixture):
         self.assertEqual(self.cli("publish", inferred, root=base, cwd=base), result)
         self.assertEqual(Path(result["entry"]).parent, base / "report")
         self.assertEqual(self.cli("report-dir", cwd=base)["path"], str(base / "report"))
-        self.assertIn("custom.tmp", (base / ".gitignore").read_text())
         self.assertEqual(self.git(base, "ls-files", "report"), "report/.gitkeep")
         self.assertEqual(self.git(base, "status", "--porcelain"), "")
         self.assertEqual(self.cli("publish", req), result)

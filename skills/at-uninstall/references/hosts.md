@@ -14,7 +14,7 @@
 
 优先在原 Harness 的宿主上下文调用 runner 旁 `dsh-snapshot.mjs` 导出的 `observe(ctx, agent, session, challenge, signal)`。传入**正在处理本次请求的 agent** 和真实会话 ID，以便查询该作用域上的所有提供方。把返回值原样写为 UTF-8 JSON。文件监听刷新需要时间；仍显示上次的入口时，在下一步重新查询。
 
-普通聊天只有模型工具时，也可以用当前会话的完整目录更新和 `skill` 工具逐名检查。确认宿主完成发现（无 incomplete 提示），逐一查询本轮的 14 个名称，仅记录查询结果。已加载正文记 `FOUND`，明确“不允许模型调用”记 `SKILL_NOT_MODEL_INVOCABLE`，明确“unknown or no longer available”记 `SKILL_NOT_FOUND`；工具不可用、超时、目录发现失败或其他歧义均记 `UNKNOWN`。发现的技能正文仅用于识别来源，不执行业务。将实际入口绝对路径写入 `path`；工具只返回目录时，读取其 SKILL.md 核对名称。对于扁平文件和路径不明的条目，核对当前会话技能选择器的来源。只看到名称建议框为空不能证明清单完整。
+普通聊天只有模型工具时，也可以用当前会话的完整目录更新和 `skill` 工具逐名检查。确认宿主完成发现（无 incomplete 提示），逐一查询本轮的 16 个名称，仅记录查询结果。已加载正文记 `FOUND`，明确“不允许模型调用”记 `SKILL_NOT_MODEL_INVOCABLE`，明确“unknown or no longer available”记 `SKILL_NOT_FOUND`；工具不可用、超时、目录发现失败或其他歧义均记 `UNKNOWN`。发现的技能正文仅用于识别来源，不执行业务。将实际入口绝对路径写入 `path`；工具只返回目录时，读取其 SKILL.md 核对名称。对于扁平文件和路径不明的条目，核对当前会话技能选择器的来源。只看到名称建议框为空不能证明清单完整。
 
 两种取证方式都使用原会话、原 cwd 和 runner **最近一次输出的 challenge**。每次 `inventory` 或 `verify` 重新查询宿主，不能将历史聊天记录或磁盘扫描结果当成宿主清单。若当前版本不能提供完整证据，报告“未能验证”。使用 `--snapshot` 传入的文件放在 runner 目录内。
 
@@ -25,7 +25,7 @@
 | host、session、cwd、challenge | 发起此次查询的宿主标识（codex 或 dsh）、真实会话 ID、原工作目录和本次查询标记。Codex 使用 prepare 时的 session，默认空字符串。 |
 | complete | 宿主明确完成了本次发现时为 true。 |
 | skills | 宿主返回的完整注册项数组；每项含 name，以及宿主提供的 path、source、provider。 |
-| probes | DSH 工具逐名模式下替代 skills。键为全部 14 个正式名称，值为含 code 和可用 path 的对象。 |
+| probes | DSH 工具逐名模式下替代 skills。键为全部 16 个正式名称，值为含 code 和可用 path 的对象。 |
 
 DSH 可在文件系统提供方的 `customSkillDirs` 中解除单个源码扫描根；从当前配置层读出并保留其他项，等待配置重载。使用工作区或用户技能根中的链接时，只解除入口链接。用户范围的共享 `.agents/skills` 可能同时供两个宿主使用。
 

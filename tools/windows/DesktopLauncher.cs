@@ -11,6 +11,8 @@ internal static class DesktopLauncher
     const string Action = "handbook";
 #elif BOARD
     const string Action = "board";
+#elif CHAT
+    const string Action = "chat";
 #elif STOP
     const string Action = "stop";
 #else
@@ -36,7 +38,7 @@ internal static class DesktopLauncher
                 else
                 {
                     int port;
-                    if ((arg != "-BoardPort" && arg != "-HandbookPort") || ++i >= args.Length ||
+                    if ((arg != "-BoardPort" && arg != "-HandbookPort" && arg != "-ChatPort") || ++i >= args.Length ||
                         !int.TryParse(args[i], NumberStyles.None, CultureInfo.InvariantCulture, out port) ||
                         port < 1 || port > 65535)
                         throw new ArgumentException("Invalid desktop launcher option: " + arg);

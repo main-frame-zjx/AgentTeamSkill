@@ -14,9 +14,9 @@ const eventNames = { note: '追加说明', move: '状态流转', amend: '需求�
     <article class="drawer-inner">
       <div class="drawer-top"><span><FileText :size="17"/>需求详情</span><button class="icon-btn" aria-label="关闭详情" autofocus @click="emit('close')"><X :size="20"/></button></div>
       <template v-if="task">
-        <div class="drawer-meta"><span class="chip">{{ task.stage.slice(1) }}</span><code>{{ task.code || task.id }}</code></div>
+        <div class="drawer-meta"><span class="chip">{{ task.stage.slice(1) }}</span><code>{{ task.code }}</code></div>
         <h2 id="detail-heading">{{ task.title }}</h2>
-        <dl class="facts"><dt>目标版本</dt><dd>{{ task.targetVersion ?? '未绑定版本' }}</dd><dt>所属角色</dt><dd>{{ task.role }}</dd><dt>验收人</dt><dd>{{ task.reviewer }}</dd><dt>来源</dt><dd>{{ task.source }}</dd><dt>需求编号</dt><dd><code>{{ task.id }}</code></dd></dl>
+        <dl class="facts"><dt>目标版本</dt><dd>{{ task.targetVersion }}</dd><dt>所属角色</dt><dd>{{ task.role }}</dd><dt>验收人</dt><dd>{{ task.reviewer }}</dd><dt>来源</dt><dd>{{ task.source }}</dd><dt>需求编号</dt><dd><code>{{ task.id }}</code></dd></dl>
         <section><h3>当前目标</h3><p>{{ task.goal }}</p></section>
         <section><h3><CheckCheck :size="17"/>验收条件</h3><ol><li v-for="(criterion,i) in task.criteria" :key="i">{{ criterion }}</li></ol></section>
         <section><h3><History :size="17"/>追加记录 <small>{{ task.events.length }}</small></h3>

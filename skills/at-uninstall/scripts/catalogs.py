@@ -13,7 +13,7 @@ NAMES = (
     "at-init-team", "at-add-team-member", "at-update-team-member", "at-help",
     "at-team-discuss", "at-add-worklist", "at-work", "at-manage-workspace",
     "at-review-work", "at-manage-memory", "at-manage-library", "at-publish",
-    "at-start-board", "at-uninstall",
+    "at-receive-message", "at-reply-message", "at-start-board", "at-uninstall",
 )
 
 

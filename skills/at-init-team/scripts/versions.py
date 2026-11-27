@@ -1,21 +1,8 @@
 """Version identities, formal release history and registered publication roles."""
 
-import re
 from pathlib import Path
 
-from core import dump, field, inside, member, project, read_json, require, role_dir, write
-
-
-def version(value):
-    require(isinstance(value, str) and len(value) <= 64
-            and re.fullmatch(r"[vV]?[0-9]+(?:\.[0-9]+)*", value.strip()),
-            "请指定数字版本，例如 v1.0 或 v1.10.2")
-    parts = [int(p) for p in value.strip().lstrip("vV").split(".")]
-    while len(parts) > 2 and parts[-1] == 0:
-        parts.pop()
-    if len(parts) == 1:
-        parts.append(0)
-    return "v" + ".".join(map(str, parts))
+from core import dump, field, inside, member, project, read_json, require, role_dir, version, write
 
 
 def order(value):
@@ -35,7 +22,7 @@ def formal_versions(records):
     """First formal publication seals the version. Further channels and revisions reuse it."""
     seals = {}
     for row in records:
-        if row.get("kind") != "dev":
+        if row["kind"] != "dev":
             seals.setdefault(row["version"], row)
     return seals
 
@@ -47,7 +34,7 @@ def open_version(root, target):
     receipt = pending_path(root) / "receipt.json"
     if receipt.is_file():
         row = read_json(receipt)
-        if row.get("kind") != "dev":
+        if row["kind"] != "dev":
             require(order(target) > order(row["version"]), "该版本正在发布，请先完成发布重试")
 
 
@@ -56,20 +43,26 @@ def set_iteration(root, request):
     target = version(field(request, "version"))
     open_version(root, target)
     data["current_version"] = target
+    if "goal" in request:
+        goal = field(request, "goal")
+        require(len(goal.splitlines()) == 1, "版本目标应为单行")
+        data.setdefault("version_goals", {})[target] = goal
     write(root / "AT.json", dump(data))
     return {"current_version": target}
 
 
-def context_role(root, data, start):
+def context_role(root, data, start, *, purpose=None):
     cwd = Path.cwd().resolve()
     if not cwd.is_relative_to(root):
         origin = next((p for p in (cwd, *cwd.parents) if (p / "AT.json").is_file()), None)
         if origin:
             require(not any(cwd.is_relative_to(role_dir(origin, r).resolve()) for r in project(origin)["members"]),
-                    "当前角色属于另一个项目。请切换到目标项目对应角色的 AI 会话；发布请由项目负责人执行。")
+                    "当前角色属于另一个项目。请切换到目标项目对应角色的 AI 会话" +
+                    (f"执行{purpose}。" if purpose else "；发布请由项目负责人执行。"))
     found = {role["name"] for role in data["members"] for path in (cwd, start)
              if path.resolve().is_relative_to(role_dir(root, role).resolve())}
-    require(len(found) <= 1, "当前目录与指定的角色目录不一致。发布项目成果请切换到项目负责人的 AI 会话执行。")
+    require(len(found) <= 1, "当前目录与指定的角色目录不一致。" +
+            (f"请切换到对应角色的 AI 会话执行{purpose}。" if purpose else "发布项目成果请切换到项目负责人的 AI 会话执行。"))
     return next(iter(found), None)
 
 

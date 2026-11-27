@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from core import STAGES, field, inside, project, require, role_dir
+from core import STAGES, UnsupportedProjectFormat, field, inside, project, require, role_dir
 from tasks import effective, role_tasks
-from versions import formal_versions, history, version
+from versions import formal_versions, history
 
 
 def catalog():
@@ -48,15 +48,14 @@ def suggest(rows, names, current_role, target, released):
     if current_role and any(r["stage"] != STAGES[3] for r in rows):
         return recommendation("at-start-board", f"{current_role}暂无可领取、续做或验收的事项，其他角色仍有任务。",
                               "查看全队进度和角色分工。")
-    if released:
-        if len(names) >= 2:
-            return recommendation("at-team-discuss", f"{target} 已正式发布。", "商定下一轮版本目标与分工。")
-        return recommendation("at-add-worklist", f"{target} 已正式发布。", "为下一个迭代登记需求。")
-    if target and any(r["version"] == target for r in rows):
+    if not released and any(r["version"] == target for r in rows):
         return recommendation("at-publish", f"{target} 的需求均已归档，可由管理角色核查发布条件。",
                               f"核查 {target} 的交付材料和发布条件。")
-    return recommendation("at-manage-workspace", "已有归档需求，当前迭代尚无可确认的版本需求。",
-                          "查看归档需求的版本归属。")
+    reason = f"{target} 已正式发布。" if released else f"{target} 尚无需求。"
+    iteration = "下一迭代" if released else target
+    if len(names) >= 2:
+        return recommendation("at-team-discuss", reason, f"商定{iteration}的目标与分工。")
+    return recommendation("at-add-worklist", reason, f"为{iteration}登记需求。")
 
 
 def inspect_project(start, request):
@@ -76,7 +75,7 @@ def inspect_project(start, request):
         for key in ("id", "name", "vault", "team_repo", "remote"):
             field(data, key)
         require(isinstance(data.get("members"), list), "members 应为数组")
-        target = version(data["current_version"]) if data.get("current_version") else None
+        target = data["current_version"]
         names, rows = [], []
         current_role = None
         for role in data["members"]:
@@ -96,15 +95,27 @@ def inspect_project(start, request):
                 spec = effective(task.spec, task.events)
                 rows.append({"id": spec["id"], "title": spec["title"], "role": name,
                              "stage": STAGES[task.stage], "reviewer": spec["reviewer"],
-                             "version": version(spec["version"]) if spec.get("version") else None})
+                             "version": spec["version"]})
         check_path = root / ".at-state" / "releases.json"
         releases = history(root)
         require(isinstance(releases, list), "发布记录应为数组")
         released = target in formal_versions(releases)
         counts = {stage: sum(r["stage"] == stage for r in rows) for stage in STAGES}
-        return {**result, "status": "project", "root": str(root), "name": data["name"], "roles": names,
+        from chat_api import chat_run, directory
+        journal = root / ".at-state/chat-transaction.json"
+        check_path = journal if journal.exists() else directory(root, data) / "meta.json"
+        inbox = chat_run("summary", start, {})
+        advice = suggest(rows, names, current_role, target, released)
+        pending = inbox["by_role"].get(current_role, {}).get("pending", 0)
+        if pending:
+            advice = recommendation("at-work", f"{current_role}有 {pending} 项未处理提醒。",
+                                    f"请{current_role}先收齐消息再列出本轮工作清单。")
+        return {**result, "inbox": inbox, "status": "project", "root": str(root), "name": data["name"], "roles": names,
                 "current_role": current_role, "version": target, "released": released, "tasks": rows,
-                "counts": counts, "recommendation": suggest(rows, names, current_role, target, released)}
+                "counts": counts, "recommendation": advice}
     except (ValueError, OSError, KeyError, TypeError, AttributeError) as exc:
+        advice = (recommendation("at-init-team", str(exc), "在另一个空目录新建项目。")
+                  if isinstance(exc, UnsupportedProjectFormat)
+                  else recommendation(None, "项目记录需要核对。", f"请检查 {check_path}。"))
         return {**result, "status": "invalid", "root": str(root), "path": str(check_path), "error": str(exc),
-                "recommendation": recommendation(None, "项目记录需要核对。", f"请检查 {check_path}。")}
+                "recommendation": advice}

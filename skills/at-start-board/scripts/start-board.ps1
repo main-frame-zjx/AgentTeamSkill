@@ -2,6 +2,7 @@
 param(
     [ValidateRange(1, 65535)][int]$Port = 47361,
     [ValidateRange(1, 65535)][int]$HandbookPort = 8764,
+    [ValidateRange(1, 65535)][int]$ChatPort = 47362,
     [string]$DesktopDirectory = [Environment]::GetFolderPath('DesktopDirectory'),
     [switch]$FromShortcut,
     [switch]$NoBrowser
@@ -22,6 +23,6 @@ if ($FromShortcut) {
     # Keep older project-board shortcuts working until the next normal invocation.
     & (Join-Path $tools 'desktop-services.ps1') board -BoardPort $Port -NoBrowser:$NoBrowser
 } else {
-    & (Join-Path $tools 'set-desktop-shortcuts.ps1') -DesktopDirectory $DesktopDirectory -BoardPort $Port -HandbookPort $HandbookPort
-    & (Join-Path $tools 'desktop-services.ps1') both -BoardPort $Port -HandbookPort $HandbookPort -NoBrowser:$NoBrowser
+    & (Join-Path $tools 'set-desktop-shortcuts.ps1') -DesktopDirectory $DesktopDirectory -BoardPort $Port -HandbookPort $HandbookPort -ChatPort $ChatPort
+    & (Join-Path $tools 'desktop-services.ps1') all -BoardPort $Port -HandbookPort $HandbookPort -ChatPort $ChatPort -NoBrowser:$NoBrowser
 }

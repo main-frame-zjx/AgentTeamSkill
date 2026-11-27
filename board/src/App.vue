@@ -11,22 +11,16 @@ const active = computed(() => registry.value.projects.find(p => p.id === registr
 const data = ref<Snapshot | null>(null)
 const tab = ref<'tasks'|'roles'|'reports'>('tasks')
 const role = ref('')
-const versionChoice = ref('current')
-const versionFilter = computed({
-  get: () => versionChoice.value === 'current' && !data.value?.currentVersion ? 'all' : versionChoice.value,
-  set: (choice: string) => { versionChoice.value = choice }
-})
+const versionFilter = ref('current')
 const versionTasks = computed(() => {
   const tasks = data.value?.tasks ?? []
   if (versionFilter.value === 'all') return tasks
-  let target: string | null = versionFilter.value
-  if (target === 'current') target = data.value?.currentVersion ?? null
-  if (target === 'unbound') target = null
+  const target = versionFilter.value === 'current' ? data.value?.currentVersion : versionFilter.value
   return tasks.filter(t => t.targetVersion === target)
 })
 const numberedOptions = computed(() => {
-  const choices = (data.value?.versions ?? []).filter(v => v !== data.value?.currentVersion || v === versionChoice.value)
-  if (versionChoice.value.startsWith('v') && !choices.includes(versionChoice.value)) choices.push(versionChoice.value)
+  const choices = (data.value?.versions ?? []).filter(v => v !== data.value?.currentVersion || v === versionFilter.value)
+  if (versionFilter.value.startsWith('v') && !choices.includes(versionFilter.value)) choices.push(versionFilter.value)
   return choices
 })
 const selected = ref('')
@@ -73,7 +67,7 @@ watch(tab, (next, previous) => {
   void refresh()
 })
 watch(() => registry.value.active, () => {
-  versionChoice.value = 'current'
+  versionFilter.value = 'current'
   generation++; refreshing.value = false; data.value = null; role.value = ''; selected.value = ''
   updated.value = ''; unavailable.value = ''; tab.value = 'tasks'; actions.value = false
   void refresh()
@@ -142,7 +136,7 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
           <div class="project-head">
             <div class="project-emblem"><Boxes :size="28" :stroke-width="1.7"/></div>
             <div class="project-title">
-              <div class="title-line"><h1>{{ data?.name || active.name }}</h1><span v-if="data" class="chip">{{ data.currentVersion ? '当前版本 ' + data.currentVersion : '未设置当前版本' }}</span></div>
+              <div class="title-line"><h1>{{ data?.name || active.name }}</h1><span v-if="data" class="chip">当前版本 {{ data.currentVersion }}</span></div>
               <p :title="active.root"><FolderOpen :size="14"/>{{ active.root }}</p>
             </div>
             <div class="actions"><button class="icon-btn" aria-label="项目选项" :aria-expanded="actions" @click="actions = !actions"><MoreHorizontal :size="21"/></button>
@@ -156,9 +150,8 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
             <div v-if="data && tab !== 'reports'" class="version-control">
               <label for="version-filter">查看版本</label>
               <span class="select-wrap"><select id="version-filter" v-model="versionFilter">
-                <option v-if="data.currentVersion" value="current">当前版本 · {{ data.currentVersion }}</option>
+                <option value="current">当前版本 · {{ data.currentVersion }}</option>
                 <option v-for="v in numberedOptions" :key="v" :value="v">{{ v }}</option>
-                <option v-if="data.tasks.some(t => t.targetVersion === null) || versionFilter === 'unbound'" value="unbound">未绑定版本</option>
                 <option value="all">全部版本</option>
               </select><ChevronDown :size="14"/></span>
             </div>
@@ -177,10 +170,10 @@ onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibili
                   <header><component :is="icons[i]" :size="17"/><h3>{{ stage.slice(1) }}</h3><span>{{ columns[i].length }}</span></header>
                   <div class="cards">
                     <button v-for="t in columns[i]" :key="t.id" class="task-card" @click="selected = t.id">
-                      <div class="card-meta"><code>{{ t.code || t.id.slice(0,11) }}</code><ArrowUpRight :size="15"/></div>
+                      <div class="card-meta"><code>{{ t.code }}</code><ArrowUpRight :size="15"/></div>
                       <strong>{{ t.title }}</strong>
                       <span class="role-pill" :class="pillColor(t)"><UserRound :size="12"/>{{ t.role }}</span>
-                      <span v-if="versionFilter === 'all'" class="task-version">{{ t.targetVersion ?? '未绑定版本' }}</span>
+                      <span v-if="versionFilter === 'all'" class="task-version">{{ t.targetVersion }}</span>
                     </button>
                     <div v-if="!columns[i].length" class="empty-column">暂无需求</div>
                   </div>

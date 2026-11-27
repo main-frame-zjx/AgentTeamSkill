@@ -6,9 +6,11 @@ import uuid
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+import memory
+from learning import KINDS, line
 from core import (PROJECT_FORMAT, STAGES, atomic, digest, dump, field, git, git_result, inside, lock, member,
                   project, read_json, require, require_repo_root, role_dir, save, segment, texts, write)
-from versions import version
+from versions import context_role, version
 
 
 def repository_name(remote):
@@ -59,6 +61,10 @@ def init(root, request):
                 empty_remote = True
             data = {"format": PROJECT_FORMAT, "id": str(uuid.uuid4()), "name": name, "current_version": current_version,
                     "vault": str(vault), "team_repo": team_repo, "remote": remote, "members": []}
+            if "goal" in request:
+                data["version_goals"] = {current_version: line(request, "goal")}
+            from chat_api import initialize
+            initialize(stage, data)
             write(stage / "AT.json", dump(data))
             if empty_remote:
                 git(repo, "push", "-u", "origin", "main")
@@ -75,32 +81,6 @@ def init(root, request):
                     dest.rename(stage / dest.name)
                 raise
     return data
-
-
-def prepare_report_dir(base, *, register=False):
-    folder = inside(base, "report")
-    require(folder.resolve() == folder, f"角色报告目录已重定向 {folder}")
-    ignore = inside(base, ".gitignore")
-    keep = inside(folder, ".gitkeep")
-    original = ignore.read_bytes() if ignore.exists() else b""
-    rules = b"/report/*\n!/report/.gitkeep\n"
-    paths = []
-    if rules not in original.replace(b"\r\n", b"\n"):
-        clean = not register or not git(base, "status", "--porcelain", "--", ".gitignore")
-        with ignore.open("ab") as stream:
-            if original and not original.endswith(b"\n"):
-                stream.write(b"\n")
-            stream.write(rules)
-        if clean:
-            paths.append(ignore)
-    folder.mkdir(exist_ok=True)
-    if not keep.exists():
-        write(keep, "")
-    if register and not git(base, "ls-files", "--", "report/.gitkeep"):
-        paths.append(keep)
-    if register and paths:
-        save(base, paths, "Prepare local role report directory")
-    return folder
 
 
 def add_member(root, request):
@@ -124,7 +104,6 @@ def add_member(root, request):
         require(all(existing.get(k) == v for k, v in role.items()) and (base / "Agent.md").read_text(encoding="utf-8") == profile,
                 "同名角色已存在，档案不同")
         require_repo_root(base)
-        prepare_report_dir(base, register=True)
         return existing
     if pending.exists():
         require(read_json(pending) == request, "同名成员有未完成的创建操作，请使用原输入重试")
@@ -136,17 +115,15 @@ def add_member(root, request):
         git(base, "init", "-b", "main")
     require_repo_root(base)
     if not (base / ".gitignore").exists():
-        write(base / ".gitignore", "/repository/\n")
-    report = prepare_report_dir(base)
-    write(base / ".gitattributes", "workspace/*/*.md text eol=lf\n")
+        write(base / ".gitignore", "/repository/\n/report/*\n!/report/.gitkeep\n")
+    write(base / ".gitattributes", "workspace/*/*.md text eol=lf\nMemory.md text eol=lf\n.memory-state.json text eol=lf\n")
     write(base / "Agent.md", profile)
-    memory = base / "Memory.md"
-    if not memory.exists():
-        write(memory, f"# {name}的工作记忆\n\n角色已加入{data['name']}，等候首项需求。\n")
-    keep = [base / ".agent/.gitkeep", *(base / "workspace" / s / ".gitkeep" for s in STAGES)]
+    keep = [inside(base, "report", ".gitkeep"), base / ".agent/.gitkeep", *(base / "workspace" / s / ".gitkeep" for s in STAGES)]
     for path in keep:
         write(path, "")
     library.mkdir(parents=True, exist_ok=True)
+    for category in KINDS.values():
+        inside(library, category).mkdir(exist_ok=True)
     repo = inside(root, data["team_repo"])
     require_repo_root(repo)
     worktree = inside(base, "repository", repo.name)
@@ -159,7 +136,8 @@ def add_member(root, request):
             git(repo, "worktree", "add", worktree, branch)
     require_repo_root(worktree)
     require(git(worktree, "branch", "--show-current") == branch, "角色工作树分支不符")
-    save(base, [base / ".gitignore", base / ".gitattributes", base / "Agent.md", memory, report / ".gitkeep", *keep],
+    documents = memory.initialize(root, data, role)
+    save(base, [base / ".gitignore", base / ".gitattributes", base / "Agent.md", *documents, *keep],
          f"Register {directory}")
     if not existing:
         data["members"].append(role)
@@ -199,9 +177,14 @@ def update_member(root, request):
     return {**result, "sha256": digest(new), "commit": git(base, "log", "-1", "--format=%H", "--", "Agent.md")}
 
 
-def repositories(root, request):
+def repositories(root, request, start=None):
     data = project(root)
-    role = member(data, field(request, "role"))
+    current = context_role(root, data, start) if start is not None else None
+    identity = request.get("role", current)
+    require(isinstance(identity, str) and identity.strip(), "缺少非空文本字段 role")
+    role = member(data, identity.strip())
+    require(not current or role["name"] == current,
+            f"当前处于 {current} 目录，不能代办 {role['name']} 的代码同步或交付")
     repo = inside(root, data["team_repo"])
     tree = inside(role_dir(root, role), "repository", repo.name)
     require_repo_root(repo)
@@ -214,16 +197,16 @@ def repositories(root, request):
     return role, repo, tree
 
 
-def sync(root, request):
-    role, repo, tree = repositories(root, request)
+def sync(root, request, start=None):
+    role, repo, tree = repositories(root, request, start)
     git(tree, "merge", "--no-edit", "refs/remotes/origin/main")
     return {"branch": role["branch"], "test_this_commit": git(tree, "rev-parse", "HEAD")}
 
 
-def deliver(root, request):
+def deliver(root, request, start=None):
     tested = field(request, "tested_commit")
     checks = texts(request, "checks")
-    role, repo, tree = repositories(root, request)
+    role, repo, tree = repositories(root, request, start)
     require(git(tree, "rev-parse", "HEAD") == tested, "自测版本与当前角色提交不一致")
     receipt = {"commit": tested, "branch": role["branch"], "remote_branch": "origin/main", "checks": checks}
     if git_result(repo, "merge-base", "--is-ancestor", tested, "refs/remotes/origin/main").returncode == 0:

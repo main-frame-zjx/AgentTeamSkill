@@ -11,6 +11,7 @@ import sys
 import tempfile
 import uuid
 
+import chat_registration
 from catalogs import NAMES, read_view
 from entries import detach, find_entries, inside_registration_roots, link_or_file, locations, shared_with
 
@@ -52,7 +53,7 @@ def prepare(args):
     if any(temp.is_relative_to(p.resolve()) for p in roots + other):
         raise ValueError("请选择技能发现目录以外的 TEMP 目录")
     run = Path(tempfile.mkdtemp(prefix="at-uninstall-", dir=temp))
-    for name in ("uninstall.py", "catalogs.py", "entries.py", "dsh-snapshot.mjs"):
+    for name in ("uninstall.py", "catalogs.py", "entries.py", "chat_registration.py", "dsh-snapshot.mjs"):
         shutil.copyfile(HERE / name, run / name)
     state = {"host": args.host, "session": args.session or "", "cwd": str(cwd), "roots": list(map(str, roots)),
              "other": list(map(str, other)), "extra": [str(p.absolute()) for p in args.codex_extra],
@@ -110,14 +111,20 @@ def inspect(state, args):
         else:
             status = "原本未注册，已验证"
         rows.append({"name": name, "before": state["observed"].get(name, []), "after": sources, "status": status})
-    done = view["complete"] and not entries
+    try:
+        mcp = chat_registration.status() if state["host"] == "codex" else "unmanaged"
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        mcp = "error"
+        view["complete"] = False
+        view.setdefault("errors", []).append(f"agent-team-chat: {exc}")
+    done = view["complete"] and not entries and mcp != "owned"
     if view["complete"]:
         state["pending"] = entries
         state["phase"] = "done" if done else "apply"
     state["challenge"] = uuid.uuid4().hex
     write_json(STATE, state)
     return {"host": state["host"], "cwd": state["cwd"], "session": state["session"],
-            "verified": args.command == "verify", "done": done, "complete": view["complete"],
+            "mcp": mcp, "verified": args.command == "verify", "done": done, "complete": view["complete"],
             "errors": view.get("errors"), "rows": rows,
             "entries": [{k: v for k, v in row.items() if k != "fingerprint"} for row in entries],
             "challenge": state["challenge"]}
@@ -128,6 +135,14 @@ def apply(state, args):
         return {"changes": [], "message": "已完成；可再次 verify"}
     if state["phase"] != "apply":
         raise ValueError("请先取得原宿主完整的新清单，再处理登记入口")
+    if state["host"] == "codex":
+        try:
+            chat_registration.remove()
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            state["phase"] = "observe"
+            write_json(STATE, state)
+            return {"changes": [], "complete": False, "done": False, "mcp": "error",
+                    "errors": [f"agent-team-chat: {exc}"]}
     pending = state["pending"]
     others = any(row["name"] != "at-uninstall" for row in pending)
     state["phase"] = "observe"

@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 $framework = if ([Environment]::Is64BitOperatingSystem) { 'Framework64' } else { 'Framework' }
 $compiler = Join-Path $env:SystemRoot "Microsoft.NET\$framework\v4.0.30319\csc.exe"
 $source = Join-Path $PSScriptRoot 'DesktopLauncher.cs'
-$launchers = @{ handbook = 'AgentTeamHandbook'; board = 'AgentTeamBoard'; stop = 'AgentTeamStopService' }
+$launchers = @{ handbook = 'AgentTeamHandbook'; board = 'AgentTeamBoard'; chat = 'AgentTeamChat'; stop = 'AgentTeamStopService' }
 foreach ($action in $launchers.Keys) {
     $output = Join-Path $PSScriptRoot ($launchers[$action] + '.exe')
     $icon = Join-Path $PSScriptRoot "icons\agentteam-$action.ico"

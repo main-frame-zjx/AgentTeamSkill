@@ -6,6 +6,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from learning import candidate
 from versions import open_version, version
 
 from core import (STAGES, dump, field, inside, member, now, project, require, role_dir,
@@ -51,7 +52,7 @@ def parse(path):
     require(bool(matches), f"需求文件格式错误 {path}")
     spec, *events = [json.loads(s) for s in matches]
     require(TASK_ID.fullmatch(spec["id"]) and spec["format"] == "agent-team/task-v1", f"需求标识不符 {path}")
-    require(path.stem == spec["id"] or DISPLAY_NAME.fullmatch(path.name), f"需求文件名无效 {path}")
+    require(version(spec.get("version")) == spec["version"], f"需求版本无效 {path}")
     require(raw == initial(spec) + "".join("\n" + block(e) for e in events), f"需求格式或历史损坏 {path}")
     state = 0
     for e in events:
@@ -66,6 +67,17 @@ def initial(spec):
     return f"# {spec['id']} · {spec['title']}\n\n## 需求\n\n" + block(spec) + "\n## 追加记录\n"
 
 
+def validate_task_name(task, role):
+    path = task.path
+    require(task.spec["owner"] == role["name"], f"所有者与目录不符 {path}")
+    name = DISPLAY_NAME.fullmatch(path.name)
+    require(name is not None, f"需求文件名无效 {path}")
+    prefix, number, summary = name.groups()
+    require(prefix == role.get("task_prefix") and task_filename(prefix, int(number), summary) == path.name,
+            f"需求文件名与角色配置不一致 {path}")
+    return number
+
+
 def role_tasks(root, role, *, repair=True):
     ws = inside(role_dir(root, role), "workspace")
     files = sorted(p for stage in STAGES for p in inside(ws, stage).glob("*.md"))
@@ -77,15 +89,10 @@ def role_tasks(root, role, *, repair=True):
         except (ValueError, KeyError, TypeError) as exc:
             raise ValueError(f"{path}: {exc}") from exc
         task_id = task.spec["id"]
-        require(task.spec["owner"] == role["name"], f"所有者与目录不符 {path}")
+        number = validate_task_name(task, role)
         require(task_id not in tasks, f"重复需求编号 {task_id}")
-        name = DISPLAY_NAME.fullmatch(path.name)
-        if name:
-            prefix, number, summary = name.groups()
-            require(prefix == role.get("task_prefix") and task_filename(prefix, int(number), summary) == path.name,
-                    f"需求文件名与角色配置不一致 {path}")
-            require(number not in numbers, f"角色需求流水号重复 {path}")
-            numbers.add(number)
+        require(number not in numbers, f"角色需求流水号重复 {path}")
+        numbers.add(number)
         if path.parent.name != STAGES[task.stage]:
             require(repair, f"需求位置与流转记录不一致，请核查 {path}")
             # Resume a move interrupted between appending its event and renaming the file.
@@ -96,6 +103,21 @@ def role_tasks(root, role, *, repair=True):
             task.path = path.rename(target)
         tasks[task_id] = task
     return tasks
+
+
+def referenced_tasks(root, data, role, tasks, refs):
+    """Only look into other roles' workspaces when an explicit dependency points there."""
+    missing = {ref[5:] for ref in refs if ref.startswith("task:")} - tasks.keys()
+    found = dict(tasks)
+    for other in data["members"]:
+        if not missing:
+            break
+        if other["name"] != role["name"]:
+            other_tasks = role_tasks(root, other, repair=False)
+            for key in missing.intersection(other_tasks):
+                found[key] = other_tasks[key]
+            missing.difference_update(other_tasks)
+    return found
 
 
 def locate(root, role, request):
@@ -159,8 +181,7 @@ def plan_tasks(root, data, items, batch_version=None):
             require(task_id not in existing, f"项目内重复需求编号 {task_id}")
             existing[task_id] = task
             name = DISPLAY_NAME.fullmatch(task.path.name)
-            if name:
-                highest[role["name"]] = max(highest[role["name"]], int(name.group(2)))
+            highest[role["name"]] = max(highest[role["name"]], int(name.group(2)))
 
     jobs = []
     configured = False
@@ -178,11 +199,11 @@ def plan_tasks(root, data, items, batch_version=None):
                     f"需求 key 已有不同内容 {spec['key']}")
             current = effective(task.spec, task.events)
             if explicit is not None:
-                require(version(explicit) == current.get("version"),
+                require(version(explicit) == current["version"],
                         f"已有需求版本不同 {spec['key']}")
             jobs.append(PlannedTask(owner, current, task.path, False))
             continue
-        spec["version"] = version(explicit if explicit is not None else data.get("current_version"))
+        spec["version"] = version(explicit if explicit is not None else data["current_version"])
         open_version(root, spec["version"])
         if not prefix:
             prefix = field(item, "prefix")
@@ -208,7 +229,7 @@ def write_tasks(root, data, jobs, configured):
         if job.create:
             write(job.path, initial(job.spec))
         by_repo[role_dir(root, job.owner)].append(job.path)
-        result.append({"id": job.spec["id"], "role": job.owner["name"], "version": job.spec.get("version"),
+        result.append({"id": job.spec["id"], "role": job.owner["name"], "version": job.spec["version"],
                        "path": str(job.path)})
     for repo, paths in by_repo.items():
         save(repo, paths, "Register work items")
@@ -226,8 +247,6 @@ def effective(spec, events):
     for e in events:
         if e["type"] == "amend":
             current.update(e["changes"])
-        elif e["type"] == "note" and "version" in e:
-            current["version"] = e["version"]
     return current
 
 
@@ -240,7 +259,7 @@ def list_tasks(root, request):
         if STAGES[task.stage] in wanted:
             current = effective(task.spec, task.events)
             rows.append({"id": task.spec["id"], "title": task.spec["title"], "stage": STAGES[task.stage],
-                         "path": str(task.path), "reviewer": current["reviewer"], "version": current.get("version")})
+                         "path": str(task.path), "reviewer": current["reviewer"], "version": current["version"]})
     return rows
 
 
@@ -249,33 +268,6 @@ def show_task(root, request):
     task = locate(root, role, request)
     return {"original": task.spec, "current": effective(task.spec, task.events), "events": task.events,
             "stage": STAGES[task.stage], "path": str(task.path)}
-
-
-def bind_version(root, request, actor):
-    data = project(root)
-    target = version(field(request, "version"))
-    reason = field(request, "reason")
-    items = request.get("items")
-    require(isinstance(items, list) and items, "请选择要补登记版本的需求")
-    selected = {}
-    for row in items:
-        role = member(data, field(row, "role"))
-        task = locate(root, role, row)
-        previous = effective(task.spec, task.events).get("version")
-        require(previous in (None, target), f"{task.spec['id']} 已有版本 {previous}")
-        if previous is None:
-            open_version(root, target)
-        selected[task.spec["id"]] = (role, task, previous)
-    paths = defaultdict(list)
-    for role, task, previous in selected.values():
-        if previous is None:
-            event = {"type": "note", "key": "version/" + uuid.uuid4().hex, "actor": actor,
-                     "time": now(), "reason": f"补登记至 {target}。{reason}", "version": target}
-            write(task.path, task.raw + "\n" + block(event))
-        paths[role_dir(root, role)].append(task.path)
-    for repo, files in paths.items():
-        save(repo, files, "Bind work items to " + target)
-    return {"version": target, "ids": list(selected)}
 
 
 def change(root, request, kind):
@@ -287,6 +279,13 @@ def change(root, request, kind):
     if actor != "用户":
         actor = member(data, actor)["name"]
     event = {"type": kind, "key": field(request, "key"), "actor": actor, "reason": field(request, "reason")}
+    if "candidates" in request:
+        require(kind == "note" or
+                (kind == "move" and request.get("to") == STAGES[2]), "候选应随需求备注或送验登记")
+        require(isinstance(request["candidates"], list), "candidates 应为数组")
+        rows = [candidate("task:" + spec["id"], item) for item in request["candidates"]]
+        require(len({c["id"] for c in rows}) == len(rows), "同一事件的候选 key 重复")
+        event["candidates"] = rows
     if kind == "move":
         before, after = field(request, "from"), field(request, "to")
         require(before in STAGES and after in STAGES and (STAGES.index(before), STAGES.index(after)) in EDGES,

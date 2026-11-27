@@ -8,13 +8,15 @@ from pathlib import Path
 
 import records
 import guidance
+import knowledge
+import library
 import portable
 import releases
 import reports
 import tasks
 import team
 import versions
-from core import Problem, dump, inside, lock, project, project_root, read_json, require
+from core import STAGES, Problem, dump, inside, lock, project, project_root, read_json, require
 
 
 COMMANDS = {
@@ -26,7 +28,7 @@ COMMANDS = {
     "set-iteration": versions.set_iteration,
 }
 
-RELEASE_COMMANDS = ("release", "release-check", "authorize-publisher", "import-release", "bind-version")
+RELEASE_COMMANDS = ("release", "release-check", "authorize-publisher")
 
 def run(command, start, request):
     require(isinstance(request, dict), "输入必须为 JSON 对象")
@@ -35,13 +37,23 @@ def run(command, start, request):
     if command == "init":
         return team.init(start.resolve(), request)
     root = project_root(start, exact=command in ("meeting-context", "meeting"))
-    project(root)  # Validate the format before creating any project state.
+    data = project(root)
+    if command == "project":
+        return data
     state = inside(root, ".at-state")
+    probe = command in ("work-context", "memory-read", "memory-history", "library-read", "library-index") or (
+        command == "library-lint" and not request.get("rebuild_moc"))
+    if probe and not (state / "agent-team.lock").exists():
+        # Newly initialized projects have no lock file until their first writer.
+        return knowledge.command(root, data, command, request, start)
     state.mkdir(exist_ok=True)
     if command == "verify-bin":
         # Testing an interactive GUI may take minutes; only its final proof is written atomically.
         return portable.verify(root, request, versions.publisher(root, request, start))
     with lock(state / "agent-team.lock"):
+        data = project(root)
+        if command in knowledge.COMMANDS:
+            return knowledge.command(root, data, command, request, start)
         if command == "report-dir":
             return {"path": str(reports.report_directory(root, request, start))}
         if command == "publish":
@@ -52,22 +64,54 @@ def run(command, start, request):
             actor = versions.publisher(root, request, start)
             if command == "release-check":
                 return releases.check(root, request)
-            if command == "bind-version":
-                return tasks.bind_version(root, request, actor)
-            if command == "import-release":
-                return releases.import_baseline(root, request, actor)
-            return releases.release(root, request, actor)
-        if command in ("memory", "library"):
-            return records.knowledge(root, request, command)
+            result = releases.release(root, request, actor)
+            if result.get("entry") and result["kind"] != "dev":
+                knowledge.seal(root, data, result)
+            return result
+        if command == "meeting-context":
+            result = records.context(root, request)
+            result["pending_memory"] = knowledge.sync_roles(root, data, data["members"])
+            return result
         if command in ("move", "amend", "note"):
-            return tasks.change(root, request, command)
-        return COMMANDS[command](root, request)
+            result = tasks.change(root, request, command)
+            if command in ("move", "amend"):
+                from chat_api import notification, snapshot
+                current = notification(snapshot(root, tasks.parse(Path(result["path"]))))
+                result["notification"] = current if current and current["event_key"] == request["key"] else None
+        elif command in ("sync", "deliver"):
+            result = COMMANDS[command](root, request, start)
+        else:
+            result = COMMANDS[command](root, request)
+        if command == "add-member":
+            try:
+                library.rebuild(project(root))
+            except knowledge.MAINTENANCE_ERRORS as exc:
+                return {**result, "pending_navigation": {"retry": "library-lint", "rebuild_moc": True, "error": str(exc)}}
+        if command in ("set-iteration", "meeting", "add-tasks", "move", "amend", "note", "sync", "deliver"):
+            data = project(root)
+            if command == "add-tasks":
+                names = {item["role"] for item in result}
+            elif command in ("meeting", "set-iteration"):
+                names = {r["name"] for r in data["members"]}
+            else:
+                target_role = request.get("role") or versions.context_role(root, data, start)
+                names = {target_role} if target_role else set()
+            pending = knowledge.sync_roles(root, data, [r for r in data["members"] if names.intersection((r["name"], r["dir"]))])
+            if pending and isinstance(result, list):
+                for item in result:
+                    item["pending_memory"] = [p for p in pending if p["role"] == item["role"]]
+            elif pending:
+                result["pending_memory"] = pending
+            if command == "move" and request.get("to") == STAGES[3]:
+                result["candidate_review"] = {"role": request["role"], "task_id": result["id"]}
+        return result
 
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=sorted([*COMMANDS, *RELEASE_COMMANDS, "publish", "report-dir", "verify-bin", "move", "note", "amend", "memory", "library"]))
+    parser.add_argument("command", choices=sorted([*COMMANDS, *RELEASE_COMMANDS, *knowledge.COMMANDS,
+                        "publish", "report-dir", "verify-bin", "move", "note", "amend"]))
     parser.add_argument("--root", default=".", type=Path, help="项目目录（默认当前目录）")
     parser.add_argument("--input", metavar="FILE", help="UTF-8 JSON 文件；使用 - 从标准输入读取")
     args = parser.parse_args()

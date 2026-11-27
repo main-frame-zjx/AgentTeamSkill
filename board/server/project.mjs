@@ -55,6 +55,11 @@ async function roleReports(project, member, reportBase, warnings) {
   return reports.sort(latestReports)
 }
 
+export function releaseRevision(kind, target, revision) {
+  return ['bin', 'user', 'dev'].includes(kind) && /^v\d+(?:\.\d+)+$/.test(target) &&
+    target.length <= 64 && version(target) === target && /^r[1-9]\d*$/.test(revision)
+}
+
 export async function manifest(root) {
   let raw
   try {
@@ -69,13 +74,15 @@ export async function manifest(root) {
   } catch {
     throw new Error('AT.json 不是有效的 JSON 文件')
   }
-  if (data?.format !== 'agent-team/v2' || !data.name || !data.id ||
+  if (data?.format !== 'agent-team/v3') throw new Error('需要 agent-team/v3 项目，请用 $at-init-team 在空目录新建项目')
+  if (!data.name || !data.id ||
       typeof data.name !== 'string' || typeof data.id !== 'string' || !Array.isArray(data.members)) {
-    throw new Error('AT.json 缺少 agent-team/v2 项目所需的格式、名称、标识或角色列表')
+    throw new Error('AT.json 缺少项目名称、标识或角色列表')
   }
+  if (version(data.current_version) !== data.current_version) throw new Error('AT.json.current_version 应为规范迭代版本')
   for (const role of data.members) {
     if (typeof role?.name !== 'string' || !role.name || typeof role.dir !== 'string' ||
-        !role.dir || /[\\/:]/.test(role.dir) || ['.', '..'].includes(role.dir)) {
+        role.dir !== 'AT_' + role.name || /[\\/:]/.test(role.dir) || ['.', '..'].includes(role.dir)) {
       throw new Error('AT.json 中的角色名称或目录无效')
     }
   }
@@ -112,7 +119,7 @@ function checkDetails(spec) {
   }
 }
 
-function parseTask(raw, file, stage, role) {
+function parseTask(raw, file, stage, member) {
   const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/)
   const blocks = []
   let json = null
@@ -125,11 +132,15 @@ function parseTask(raw, file, stage, role) {
   }
   const [spec, ...events] = blocks
   if (json !== null || spec?.format !== 'agent-team/task-v1' || !/^AT-[a-f0-9]{32}$/.test(spec.id)
-      || spec.owner !== role || typeof spec.title !== 'string') {
+      || spec.owner !== member.name || typeof spec.title !== 'string') {
     throw new Error('需求格式、编号或所属角色不匹配')
   }
   checkDetails(spec)
-  let targetVersion = spec.version
+  if (version(spec.version) !== spec.version) throw new Error('需求版本无效')
+  const name = /^AT-([A-Za-z]{1,24})(\d{5})-(.+)\.md$/.exec(file)
+  if (!name || name[1] !== member.task_prefix || Number(name[2]) === 0 ||
+      !/[\u3400-\u9fff]/u.test(name[3]) || [...name[3]].length > 40 || /[<>:"/\\|?*\u0000-\u001f]/u.test(name[3]) ||
+      name[3].replace(/\s+/gu, ' ').replace(/^[ .-]+|[ .-]+$/gu, '') !== name[3]) throw new Error('需求文件名与角色配置不一致')
   const current = { goal: spec.goal, criteria: spec.criteria, reviewer: spec.reviewer }
   for (const event of events) {
     if (!['note', 'move', 'amend'].includes(event?.type) || typeof event.reason !== 'string'
@@ -139,12 +150,11 @@ function parseTask(raw, file, stage, role) {
       Object.assign(current, event.changes)
       checkDetails(current)
     }
-    if (event.type === 'note' && Object.hasOwn(event, 'version')) targetVersion = event.version
     if (event.type === 'move' && (!stages.includes(event.from) || !stages.includes(event.to)
         || (event.evidence !== undefined && !stringList(event.evidence)))) throw new Error('流转记录无效')
   }
-  return { id: spec.id, code: /^AT-([A-Za-z]+\d{5})-/.exec(file)?.[1] ?? '',
-    title: spec.title, role, stage, source: spec.source ?? '', targetVersion: targetVersion == null ? null : version(targetVersion),
+  return { id: spec.id, code: name[1] + name[2], title: spec.title, role: member.name, stage,
+    source: spec.source, targetVersion: spec.version,
     ...current, events }
 }
 
@@ -163,26 +173,17 @@ export async function snapshot(project, reportBase, includeProfiles = false) {
   const data = await manifest(root)
   if (data.id !== project.manifestId) throw new Error('此路径的 AT.json 已指向其他项目，请重新定位')
   const tasks = [], warnings = [], reports = [], seen = new Set()
-  let currentVersion = null
-  if (data.current_version != null) {
-    try {
-      currentVersion = version(data.current_version)
-    } catch (error) {
-      warnings.push({ path: 'AT.json', message: error.message })
-    }
-  }
-  const versions = new Set(currentVersion ? [currentVersion] : [])
+  const currentVersion = data.current_version
+  const versions = new Set([currentVersion])
   const historyPath = '.at-state/releases.json'
-  const historicalEntries = new Set()
   try {
     const history = JSON.parse(await readFile(await resolveInside(root, historyPath), 'utf8'))
     if (!Array.isArray(history)) throw new Error('发布历史应为数组')
     for (const release of history) {
-      versions.add(version(release?.version))
-      if (typeof release.entry === 'string' && /^publish\/.+\.html?$/i.test(release.entry)) {
-        const relative = release.entry.slice('publish/'.length)
-        if (relative.split('/').every(p => p && p !== '.' && p !== '..' && !/[\\:]/.test(p))) historicalEntries.add(relative)
+      if (!Number.isSafeInteger(release?.revision) || !releaseRevision(release.kind, release.version, 'r' + release.revision)) {
+        throw new Error('发布记录缺少有效的类别、版本或修订号')
       }
+      versions.add(release.version)
     }
   } catch (error) {
     if (error.code !== 'ENOENT') warnings.push({ path: historyPath, message: error.message })
@@ -205,10 +206,10 @@ export async function snapshot(project, reportBase, includeProfiles = false) {
         const relative = path.join(dir, file.name)
         try {
           const raw = await readFile(await resolveInside(root, relative), 'utf8')
-          const task = parseTask(raw, file.name, stage, member.name)
+          const task = parseTask(raw, file.name, stage, member)
           if (seen.has(task.id)) throw new Error('需求编号重复')
           tasks.push(task)
-          if (task.targetVersion) versions.add(task.targetVersion)
+          versions.add(task.targetVersion)
           seen.add(task.id)
         } catch (error) {
           warnings.push({ path: relative, message: error.message })
@@ -221,7 +222,6 @@ export async function snapshot(project, reportBase, includeProfiles = false) {
     try {
       const publicRoot = await resolveInside(root, 'publish')
       reports.push({ ...await reportFile(publicRoot, parts, reportBase + '/' + project.id), ...metadata })
-      historicalEntries.delete(file)
     } catch (error) {
       if (error.code !== 'ENOENT') warnings.push({ path: path.join('publish', file), message: error.message })
     }
@@ -232,13 +232,12 @@ export async function snapshot(project, reportBase, includeProfiles = false) {
     for (const folder of await readDirectory(path.join('publish', kind))) {
       if (!folder.isDirectory() || !/^v\d+(?:\.\d+)+$/.test(folder.name)) continue
       for (const revision of await readDirectory(path.join('publish', kind, folder.name))) {
-        if (!revision.isDirectory() || !/^r[1-9]\d*$/.test(revision.name)) continue
+        if (!revision.isDirectory() || !releaseRevision(kind, folder.name, revision.name)) continue
         await addReport([kind, folder.name, revision.name, 'index.html'],
           { kind, version: folder.name, revision: revision.name })
       }
     }
   }
-  for (const file of historicalEntries) await addReport(file.split('/'))
   reports.sort(latestReports)
   const result = { name: data.name, currentVersion, versions: [...versions].sort(newestFirst),
     roles: data.members.map(m => m.name), tasks, warnings, reports }
@@ -248,7 +247,11 @@ export async function snapshot(project, reportBase, includeProfiles = false) {
         roleFile(root, member.dir, 'Agent.md'), roleFile(root, member.dir, 'Memory.md'),
         roleReports(project, member, reportBase, warnings)
       ])
-      return { name: member.name, agent, memory, reports }
+      const profile = { name: member.name, agent, memory, reports }
+      if (typeof memory.text === 'string') {
+        profile.memoryUsage = { bytes: Buffer.byteLength(memory.text, 'utf8'), limit: 6656 }
+      }
+      return profile
     }))
   }
   return result

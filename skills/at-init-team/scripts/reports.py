@@ -9,7 +9,6 @@ from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 from core import digest, field, inside, member, project, require, require_repo_root, role_dir, segment, write
-from team import prepare_report_dir
 from versions import context_role
 
 
@@ -92,7 +91,9 @@ def report_directory(root, request, start):
     require(not current or role["name"] == current, f"当前角色 {current} 只能整理自己的阶段报告")
     base = role_dir(root, role)
     require_repo_root(base)
-    return prepare_report_dir(base, register=True)
+    folder = inside(base, "report")
+    require(folder.is_dir() and folder.resolve() == folder, f"角色报告目录缺失或已重定向 {folder}")
+    return folder
 
 
 def publish(root, request, start):

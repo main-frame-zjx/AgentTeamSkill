@@ -156,13 +156,33 @@ def project_root(start, exact=False):
     raise Problem("此目录未找到 Agent Team 的 AT.json")
 
 
-PROJECT_FORMAT = "agent-team/v2"
+def version(value):
+    require(isinstance(value, str) and len(value) <= 64
+            and re.fullmatch(r"[vV]?[0-9]+(?:\.[0-9]+)*", value.strip()),
+            "请指定数字版本，例如 v1.0 或 v1.10.2")
+    parts = [int(p) for p in value.strip().lstrip("vV").split(".")]
+    while len(parts) > 2 and parts[-1] == 0:
+        parts.pop()
+    if len(parts) == 1:
+        parts.append(0)
+    target = "v" + ".".join(map(str, parts))
+    require(len(target) <= 64, "规范化后的版本号最多 64 个字符")
+    return target
+
+
+PROJECT_FORMAT = "agent-team/v3"
+
+
+class UnsupportedProjectFormat(Problem):
+    pass
 
 
 def project(root):
     data = read_json(root / "AT.json")
-    require(isinstance(data, dict) and data.get("format") == PROJECT_FORMAT,
-            f"AT.json 格式不受支持，当前需要 {PROJECT_FORMAT}")
+    if not isinstance(data, dict) or data.get("format") != PROJECT_FORMAT:
+        raise UnsupportedProjectFormat(f"需要 {PROJECT_FORMAT} 项目，请用 $at-init-team 在空目录新建项目")
+    target = data.get("current_version")
+    require(version(target) == target, "AT.json.current_version 应为规范迭代版本")
     return data
 
 
@@ -177,4 +197,5 @@ STAGES = ("1新需求", "2处理中", "3待验收", "4已归档")
 
 
 def role_dir(root, role):
+    require(role["dir"] == "AT_" + role["name"], f"角色目录与岗位名不符 {role['dir']}")
     return inside(root, segment(role["dir"]))

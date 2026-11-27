@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_receive_message"
+  short_description: "按需求和优先级收齐当前角色的未处理消息。"
+  default_prompt: "请用 $at-receive-message 查看我的未处理消息。"

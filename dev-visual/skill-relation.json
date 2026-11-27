@@ -3,6 +3,7 @@
     "项目初始化",
     "项目成员管理",
     "成员个人技能",
+    "角色通讯",
     "需求与验收",
     "团队会议",
     "项目发布",
@@ -43,7 +44,7 @@
     },
     {
       "name": "at-work",
-      "description": "让某个 Agent Team 角色从新需求或处理中任务开始或继续工作，完成验证、Git 交付及个人记忆整理。",
+      "description": "让角色开工时收齐定向提醒，按清单验收、返工或交付自有需求，收尾结算消息、更新记忆并逐项终检。",
       "document": "at-work/SKILL.md",
       "category": "成员个人技能",
       "next": [
@@ -58,7 +59,7 @@
             {
               "condition": "核实交付成功后，将需求移至待验收。",
               "source": "at-work/SKILL.md",
-              "quote": "核实交付成功后调用 `$at-manage-workspace` 移至待验收，附实际测试、提交 SHA、交付物相对路径。"
+              "quote": "送验前逐条对照需求当前有效的 `criteria` 自检，将对应测试结果、提交 SHA、交付物相对路径写入 `evidence`，调用 `$at-manage-workspace` 移至待验收。"
             }
           ]
         },
@@ -76,19 +77,39 @@
           "target": "at-manage-memory",
           "evidence": [
             {
-              "condition": "本轮完成后，先整理角色记忆。",
               "source": "at-work/SKILL.md",
-              "quote": "完成本轮后依次调用 `$at-manage-memory`、`$at-manage-library`；即使无新知识也评估一次。"
+              "condition": "工作收尾时更新角色交接现场。",
+              "quote": "收尾调用 `$at-manage-memory` 更新交接现场。"
             }
           ]
         },
         {
-          "target": "at-manage-library",
+          "target": "at-receive-message",
           "evidence": [
             {
-              "condition": "整理角色记忆后评估知识库，即使没有新知识也要评估。",
-              "source": "at-work/SKILL.md",
-              "quote": "完成本轮后依次调用 `$at-manage-memory`、`$at-manage-library`；即使无新知识也评估一次。"
+              "condition": "开工收齐本轮收件时。",
+              "quote": "调用 `$at-receive-message` 收齐本轮所有未处理消息。",
+              "source": "at-work/SKILL.md"
+            }
+          ]
+        },
+        {
+          "target": "at-review-work",
+          "evidence": [
+            {
+              "condition": "当前角色被指定验收时。",
+              "quote": "指定自己验收时调用 `$at-review-work`，在本轮收尾统一结算消息。",
+              "source": "at-work/SKILL.md"
+            }
+          ]
+        },
+        {
+          "target": "at-reply-message",
+          "evidence": [
+            {
+              "condition": "工作收尾时核销与外发。",
+              "quote": "调用 `$at-reply-message` 核销本轮已完成收件并发送必要提醒。",
+              "source": "at-work/SKILL.md"
             }
           ]
         }
@@ -96,16 +117,30 @@
     },
     {
       "name": "at-manage-memory",
-      "description": "根据角色的最新项目进展提炼 Memory.md，供下一次开工快速恢复中长期上下文。",
+      "description": "维护角色的六槽位工作交接记忆，记录下次开工的焦点、生效决定、风险与跨角色依赖。",
       "document": "at-manage-memory/SKILL.md",
       "category": "成员个人技能",
       "next": []
     },
     {
       "name": "at-manage-library",
-      "description": "在 Obsidian 中维护 Agent Team 角色个人知识库，沉淀可复用的方法、设计依据和问题解法。",
+      "description": "在验收、阶段收口或用户指定时，为人类初学者编写有证据的系统设计与可复用方案笔记，支持按角色或全项目检索。",
       "document": "at-manage-library/SKILL.md",
       "category": "成员个人技能",
+      "next": []
+    },
+    {
+      "name": "at-receive-message",
+      "description": "收齐当前角色在项目中的未处理提醒，按优先级与需求列出待办，保留各接收者的处理状态。",
+      "document": "at-receive-message/SKILL.md",
+      "category": "角色通讯",
+      "next": []
+    },
+    {
+      "name": "at-reply-message",
+      "description": "结算角色已完成的收件，记录仍待跟进的阻塞，并向指定接收者发送送验、打回、协作或审阅提醒。",
+      "document": "at-reply-message/SKILL.md",
+      "category": "角色通讯",
       "next": []
     },
     {
@@ -153,6 +188,46 @@
               "quote": "全部达到验收条件，调用 `$at-manage-workspace` 从 `3待验收` 转入 `4已归档`。"
             }
           ]
+        },
+        {
+          "target": "at-manage-memory",
+          "evidence": [
+            {
+              "source": "at-review-work/SKILL.md",
+              "condition": "验收退回后有跨会话阻塞需要跟进。",
+              "quote": "退回后，有需要跨会话跟进的阻塞时调用 `$at-manage-memory`，为需求所属角色记录复现条件和解除条件。"
+            }
+          ]
+        },
+        {
+          "target": "at-manage-library",
+          "evidence": [
+            {
+              "source": "at-review-work/SKILL.md",
+              "condition": "归档后按方案复杂程度交由验收人或所属角色执笔。",
+              "quote": "在项目根可核对完整实现和验收记录时，验收人可为简单方案调用 `$at-manage-library` 代整理。复杂子系统由需求所属角色在自己的会话调用 `$at-manage-library` 执笔，先读核心实现和验收记录。"
+            }
+          ]
+        },
+        {
+          "target": "at-receive-message",
+          "evidence": [
+            {
+              "condition": "独立执行验收，定位本轮送验消息。",
+              "quote": "独立验收时调用 `$at-receive-message` 核对同需求、同轮次的送验提醒。",
+              "source": "at-review-work/SKILL.md"
+            }
+          ]
+        },
+        {
+          "target": "at-reply-message",
+          "evidence": [
+            {
+              "condition": "独立验收后核销或打回。",
+              "quote": "独立执行的验收由 `$at-reply-message` 结算：归档只核销，退回时根据 move 回执向需求所属角色发送原因和证据路径。",
+              "source": "at-review-work/SKILL.md"
+            }
+          ]
         }
       ]
     },
@@ -161,18 +236,40 @@
       "description": "在 Ultra 模式下组织 Agent Team 真实多角色会议，完成至少 10 轮全员磋商、征求重大决策意见并自动分派需求。",
       "document": "at-team-discuss/SKILL.md",
       "category": "团队会议",
-      "next": []
+      "next": [
+        {
+          "target": "at-manage-memory",
+          "evidence": [
+            {
+              "source": "at-team-discuss/SKILL.md",
+              "condition": "会议落盘后由主持人派发决议，受影响的参会角色写入交接记忆。",
+              "quote": "主持人把实际纪要路径和已定决议发给仍在会的受影响角色，要求各自调用 `$at-manage-memory`，用 `memory-patch` 将本角色的决定和依赖写入交接记录。"
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "at-publish",
       "description": "由 Agent Team 的项目负责人或获授权的管理角色按版本发布可迁移的 Windows 程序包、面向用户的离线使用指南，或迭代中的甲方项目总览，支持同版本独立修订。",
       "document": "at-publish/SKILL.md",
       "category": "项目发布",
-      "next": []
+      "next": [
+        {
+          "target": "at-manage-library",
+          "evidence": [
+            {
+              "source": "at-publish/SKILL.md",
+              "condition": "首次正式封版或用户明确指定阶段收口时。",
+              "quote": "首次封版后按角色和发布版本调用 `$at-manage-library`，评估该版本尚待处理的候选；用户明确指定阶段收口时也可这样评估。"
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "at-start-board",
-      "description": "在 Windows 优先复用桌面快捷方式打开 AgentTeam 项目看板和技能手册。首次使用、入口缺失或打开失败时，检查并补齐依赖，生成或修复两个看板和停止服务的三个桌面快捷方式。",
+      "description": "在 Windows 优先复用桌面快捷方式打开 AgentTeam 项目看板、角色通讯和技能手册。首次使用、入口缺失或打开失败时，检查并补齐依赖，生成或修复三个看板和停止服务的四个桌面快捷方式。",
       "document": "at-start-board/SKILL.md",
       "category": "辅助功能",
       "next": []

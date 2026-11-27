@@ -7,15 +7,18 @@ export interface Entry {
   from?: Stage; to?: Stage; evidence?: string[]; changes?: Revision
 }
 export interface Task {
-  targetVersion: string | null
+  targetVersion: string
   id: string; code: string; title: string; role: string; stage: Stage; goal: string;
   reviewer: string; criteria: string[]; source: string; events: Entry[]
 }
 export interface Report { file: string; modified: number; url: string; kind?: 'user' | 'dev'; version?: string; revision?: string }
 export type RoleFile = { text: string; error?: never } | { error: string; text?: never }
-export interface Profile { name: string; agent: RoleFile; memory: RoleFile; reports: Report[] }
+export interface Profile {
+  name: string; agent: RoleFile; memory: RoleFile; reports: Report[]
+  memoryUsage?: { bytes: number; limit: number }
+}
 export interface Snapshot {
-  currentVersion: string | null
+  currentVersion: string
   versions: string[]
   profiles?: Profile[];
   name: string; roles: string[]; tasks: Task[]; reports: Report[]; warnings: {path: string; message: string}[]

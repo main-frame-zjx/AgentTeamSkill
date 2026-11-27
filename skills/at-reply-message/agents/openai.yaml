@@ -1,0 +1,4 @@
+interface:
+  display_name: "AT_reply_message"
+  short_description: "核销已完成待办并向指定角色发送简洁的协作提醒。"
+  default_prompt: "请用 $at-reply-message 结算本轮消息并发送必要提醒。"

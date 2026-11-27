@@ -8,7 +8,8 @@ python -X utf8 "<已解析的 at.py 绝对路径>" <命令> --root "<工作目�
 
 | 命令 | 输入 | 结果 |
 |---|---|---|
-| init | name, vault, remote，可选 version | 在指定空目录生成项目配置，current_version 默认为 v1.0。 |
+| init | name, vault, remote，可选 version、goal | 在空目录生成 agent-team/v3 项目，current_version 默认为 v1.0。 |
+| set-iteration | version，可另传单行 goal | 登记当前迭代，刷新各角色的版本概况。 |
 | project | 空对象 | AT.json，包括角色、分支和知识库位置。 |
 | help | 空对象，可指定任意工作目录 | 已安装技能目录表、项目状态、当前角色、需求明细和下一步建议。空目录和无效项目也会返回诊断；查询不写项目文件。 |
 | add-member | name, persona, focus[], workflow[] | 角色与已登记路径。 |
@@ -17,15 +18,16 @@ python -X utf8 "<已解析的 at.py 绝对路径>" <命令> --root "<工作目�
 | list | role，可选 stages[] | 该角色的需求清单。 |
 | show | role，以及 id 或 path | original、current、events、stage、path。 |
 | note / amend | role, id, key, actor, reason；amend 另需 changes | 追加说明或修订当前 goal、criteria、reviewer。 |
-| move | role, id, key, actor, reason, from, to；送验和验收另需 evidence[] | 最新状态及文件位置。 |
-| sync | role | 更新已提交且干净的角色分支，返回 test_this_commit。 |
-| deliver | role, tested_commit, checks[] | 已推送 main 的 commit 与验证记录。 |
+| move | role, id, key, actor, reason, from, to；送验和验收另需 evidence[] | 最新状态及文件位置；`notification` 给出当前有效送验或打回事件的必达接收者和建议幂等键，自验等情形为 null。amend 实际改派验收人时也会返回对应提醒。 |
+| sync | 项目根传 role，角色目录可省略 | 更新已提交且干净的角色分支，返回 test_this_commit；角色目录内禁止代办他人。 |
+| deliver | tested_commit, checks[]，项目根另传 role | 已推送 main 的 commit 与验证记录；角色目录内禁止代办他人。 |
+| work-context | 项目根传 role，角色目录可省略；可选 agent_sha256、memory_sha256 | 只读聚合开工简报：角色档案、handoff 记忆、个人技能列表、待办快照及代码工作树健康度，支持哈希未变免重传正文。另含 `pending_reviews`、`inbox_summary`、`missing_notifications` 与通讯告警。 |
 | publish | name, source，项目根调用另传 role | 将离线 HTML 入口与同名资源目录写入登记角色的 report/，返回 entry、bundle 和文件数。在角色目录可自动识别 role。 |
-| report-dir | 项目根传 role，角色目录可省略 | 准备角色本机报告目录与 Git 忽略规则，返回 path，可直接归档非 HTML 成果。 |
+| report-dir | 项目根传 role，角色目录可省略 | 返回建角时创建的本机报告目录 path，可直接归档非 HTML 成果。 |
 | release-check / release | kind（bin、user 或 dev）、目标版本及相应材料 | 查看发布资格、既有修订，或交付该类别的独立修订目录。见[发布接口](../../at-publish/references/release.md)。 |
 | verify-bin | 目标版本、发行目录、EXE 入口、构建依据和功能验证参数 | 在项目外迁移启动，返回与已测试文件内容绑定的验证编号。 |
-| memory | role；写入另传 content, expected_sha256 | 正文或写入结果、sha256、UTF-8 字节数。 |
-| library | role, path；写入同 memory | 角色目录下相对路径对应的笔记。新建时哈希传 null。 |
+| memory-read / memory-sync / memory-patch / memory-history | 角色记忆 | 读取、同步、更新槽位及回溯快照。详见[记忆与个人库接口](memory-library.md)。 |
+| library-index / library-read / library-upsert / library-lint | 个人学习库 | 检索、阅读、编撰与巡检。字段与示例见[记忆与个人库接口](memory-library.md)。 |
 | meeting-context | 可选 host | 主持人及全部角色的档案和记忆路径。 |
 | meeting | 见下例 | 会议纪要和分派需求列表。 |
 
@@ -33,7 +35,7 @@ python -X utf8 "<已解析的 at.py 绝对路径>" <命令> --root "<工作目�
 
 ## 示例会议输入
 
-有行动项时，`add-tasks`、`meeting` 优先采用单项 `version`，其次采用批次 `version`，最后采用 `AT.json` 的 `current_version`。首次缺少版本时先按用户给出的数字版本调用 `set-iteration`。历史需求的版本补登记、正式发布及查询接口见[正式发布接口](../../at-publish/references/release.md)。
+有行动项时，`add-tasks`、`meeting` 优先采用单项 `version`，其次采用批次 `version`，最后采用 `AT.json` 的 `current_version`。当前版本已封版时用 `set-iteration` 开始下一轮。发布及查询接口见[正式发布接口](../../at-publish/references/release.md)。
 
 开场单列在 `opening`。`rounds` 至少包含 10 轮，每轮须包含主持人和其他全体角色的实际发言摘要。重大决策记录用户实际回复。项目角色多于两位时按名单扩展每轮对象。
 
@@ -67,6 +69,6 @@ python -X utf8 "<已解析的 at.py 绝对路径>" <命令> --root "<工作目�
 
 ## 存储约定
 
-`AT.json` 使用 `agent-team/v2`，存放在普通项目根目录。项目锁与待重试记录在 `.at-state/`。`team_repo` 指向 `public/<远程仓库名>/`，目录名去除末尾的 `.git`。每个 `AT_<角色名>/` 都是独立的本地 Git 仓库，跟踪档案、记忆、个人技能和需求，并忽略整个 `repository/`。该目录内的 `repository/<远程仓库名>/` 是共享仓库的角色工作树，可在其旁存放其他独立仓库。跨角色分派会分别提交到各需求所属角色的仓库。各角色的 `report/` 保存本机阶段成果，Git 只跟踪目录占位。项目级程序包、用户指南、甲方总览分别保存在 `publish/bin/`、`publish/user/`、`publish/dev/`。Obsidian 笔记保存在选定库的角色子目录。
+`AT.json` 使用 `agent-team/v3`，存放在普通项目根目录。项目锁与待重试记录在 `.at-state/`。`team_repo` 指向 `public/<远程仓库名>/`，目录名去除末尾的 `.git`。每个 `AT_<角色名>/` 都是独立的本地 Git 仓库，跟踪档案、记忆、个人技能和需求，并忽略整个 `repository/`。该目录内的 `repository/<远程仓库名>/` 是共享仓库的角色工作树，可在其旁存放其他独立仓库。跨角色分派会分别提交到各需求所属角色的仓库。各角色的 `report/` 保存本机阶段成果，Git 只跟踪目录占位。项目级程序包、用户指南、甲方总览分别保存在 `publish/bin/`、`publish/user/`、`publish/dev/`。Obsidian 笔记保存在选定库的角色子目录。
 
-每份需求是规范 UTF-8 Markdown，包含原始 JSON 数据块与追加事件。正文中的稳定编号用于会议引用和重试。文件名如 `AT-Design00001-首领规则.md`，以成员登记的 `task_prefix`（1–24 个英文字母，项目内唯一）和角色自己的五位流水号开头。中文概括取 `summary` 或短标题，最多 40 字；脚本替换 Windows 文件名禁用字符。流转沿用原文件名。查询、说明、修订和流转可用原始 `id` 或当前文件的精确 `path`（绝对或相对项目根目录），旧式编号文件也可读取。
+每份需求是规范 UTF-8 Markdown，包含原始 JSON 数据块与追加事件。正文中的稳定编号用于会议引用和重试。文件名如 `AT-Design00001-首领规则.md`，以成员登记的 `task_prefix`（1–24 个英文字母，项目内唯一）和角色自己的五位流水号开头。中文概括取 `summary` 或短标题，最多 40 字；脚本替换 Windows 文件名禁用字符。流转沿用原文件名。查询、说明、修订和流转可用原始 `id` 或当前文件的精确 `path`（绝对或相对项目根目录）。

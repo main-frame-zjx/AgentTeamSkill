@@ -32,7 +32,7 @@ def distribution_files(folder):
 
 def verify(root, request, actor):
     require(os.name == "nt", "Windows 程序包需要在 Windows 上运行验证")
-    target = version(request.get("version", project(root).get("current_version")))
+    target = version(request.get("version", project(root)["current_version"]))
     source = (root / field(request, "source")).resolve()
     entry = field(request, "entry")
     exe = inside(source, entry)

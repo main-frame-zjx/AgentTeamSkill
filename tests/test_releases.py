@@ -15,7 +15,6 @@ sys.path.insert(0, str(CLI.parent))
 try:
     import at
     import releases
-    import tasks
 finally:
     sys.path.pop(0)
 
@@ -79,7 +78,7 @@ class Publications(ProjectFixture):
         self.cli("release-check", {"kind": "dev"}, cwd=pm)
         confirmed = {**req, "actor_confirmed": True}
         self.cli("release-check", confirmed, cwd=self.root)
-        for operation in ("release", "release-check", "verify-bin", "bind-version", "import-release"):
+        for operation in ("release", "release-check", "verify-bin"):
             self.assertIn("AI 会话", self.cli(operation, confirmed, cwd=dev, fail=True))
         self.assertIn("AI 会话", self.cli("release", confirmed, cwd=dev, root=pm, fail=True))
         self.assertFalse(self.state.exists())
@@ -101,7 +100,7 @@ class Publications(ProjectFixture):
                  root=self.root / ("AT_" + self.dev), fail=True)
         self.cli("release", {**payload, "artifacts": [{"task": first["id"], "path": "public/缺失.txt"}]}, fail=True)
         self.cli("release", {**payload, "artifacts": []}, fail=True)
-        self.assertEqual(list((self.root / "publish").iterdir()), [])
+        self.assertEqual(list((self.root / "publish").glob("*/*")), [])
         source = self.base / "progress"
         source.mkdir()
         (source / "index.html").write_text("<p>测试报告</p>", encoding="utf-8")
@@ -143,43 +142,18 @@ class Publications(ProjectFixture):
         self.assertEqual([r["version"] for r in json.loads(self.state.read_text(encoding="utf-8"))], ["v1.9", "v1.10"])
         self.cli("add-tasks", {"items": [{**self.items, "version": "1.09"}]}, fail=True)
 
-    def test_backfill_default_replay_and_baseline(self):
-        config = self.cli("project")
-        del config["current_version"]
-        (self.root / "AT.json").write_text(json.dumps(config), encoding="utf-8")
-        self.cli("add-tasks", {"items": [self.items]}, fail=True)
-        self.cli("set-iteration", {"version": "1.0"})
+    def test_default_version_replay_and_authorization(self):
         first = self.cli("add-tasks", {"items": [self.items]})[0]
         self.accept(first)
-        info = {"role": self.dev, "id": first["id"]}
-        before = self.cli("show", info)
-        # Reconstruct a canonical archived task created by an earlier program, without a version.
-        path = Path(before["path"])
-        del before["original"]["version"]
-        old = tasks.initial(before["original"]) + "".join("\n" + tasks.block(e) for e in before["events"])
-        path.write_bytes(old.encode())
         self.cli("set-iteration", {"version": "2.0"})
-        self.assertEqual(self.cli("add-tasks", {"items": [self.items]})[0]["path"], str(path))
-        self.assertNotIn("version", self.cli("show", info)["current"])
+        replay = self.cli("add-tasks", {"items": [self.items]})[0]
+        self.assertEqual((replay["id"], replay["version"]), (first["id"], "v1.0"))
         self.cli("authorize-publisher", {"role": "不存在", "user_confirmed": True}, fail=True)
         self.cli("add-member", self.role("制作人"))
         self.cli("authorize-publisher", {"role": "制作人"}, fail=True)
         self.cli("authorize-publisher", {"role": "制作人", "user_confirmed": True})
-        req = {"items": [info], "reason": "归档清单", "version": "1.0", "actor": "制作人", "actor_confirmed": True}
-        self.cli("bind-version", req)
-        self.cli("bind-version", req)
-        current = self.cli("show", info)
-        self.assertEqual(current["events"][:-1], before["events"])
-        self.assertTrue(path.read_bytes().startswith(old.encode()))
-        self.assertEqual(current["current"]["version"], "v1.0")
-        self.assertEqual(self.cli("add-tasks", {"items": [self.items]})[0]["version"], "v1.0")
-        self.cli("bind-version", {**req, "version": "2.0"}, fail=True)
-        (self.root / "publish/原报告.html").write_text("<p>旧版本</p>", encoding="utf-8")
-        self.cli("import-release", {"version": "0.5", "entry": "原报告.html", "time": releases.now(),
-                                    "actor": self.pm, "actor_confirmed": True, "user_confirmed": True})
         check = self.cli("release-check", {**self.payload(first, "v1.0"), "actor": "制作人"})
-        self.assertFalse(check["ready"])
-        self.assertIn("新通过验收", " ".join(check["issues"]))
+        self.assertTrue(check["ready"], check["issues"])
         current_item = self.add("默认")
         self.assertEqual(self.cli("show", {"role": self.dev, "id": current_item["id"]})["current"]["version"], "v2.0")
         meeting = {"key": "m", "topic": "项目评审", "opening": "版本", "rounds": [
@@ -213,25 +187,6 @@ class Publications(ProjectFixture):
         self.assertFalse(recovered["existing"])
         self.assertFalse((self.root / ".at-state/release-pending").exists())
         self.assertEqual(len(json.loads(self.state.read_text(encoding="utf-8"))), 1)
-
-    def test_legacy_html_can_be_reused_and_revised(self):
-        public = self.root / "publish"
-        assets = public / "v1.0"
-        assets.mkdir()
-        (assets / "old.css").write_text("body{}", encoding="utf-8")
-        entry = public / "v1.0.html"
-        entry.write_text("<p>旧版概览</p>", encoding="utf-8")
-        row = {"actor": self.pm, "version": "v1.0", "audience": "owner", "time": releases.now(),
-               "entry": "publish/v1.0.html", "entry_sha256": releases.file_hash(entry), "assets": "publish/v1.0",
-               "asset_hashes": releases.reports.bundle_files(assets)}
-        self.state.write_text(json.dumps([row]), encoding="utf-8")
-        query = {"actor": self.pm, "actor_confirmed": True, "version": "1", "kind": "dev"}
-        self.assertEqual(self.cli("release-check", query)["latest"]["revision"], 1)
-        self.assertEqual(self.cli("release", {**query, "action": "reuse"})["entry"], str(entry))
-        new = self.cli("release", {**query, "action": "new", "previous_revision": 1, "request_id": "new-dev",
-                                   "overview": "正在规划", "blockers": [], "decisions": [], "next_steps": []})
-        self.assertTrue(Path(new["entry"]).samefile(public / "dev/v1.0/r2/index.html"))
-        self.assertEqual(entry.read_text(encoding="utf-8"), "<p>旧版概览</p>")
 
     def test_dev_snapshot_binary_guide_and_revisions(self):
         item = self.add("教程")
@@ -283,7 +238,7 @@ class Publications(ProjectFixture):
         binary["bin_check"] = proof["id"]
         resource.write_text("changed\n", encoding="ascii")
         self.cli("release", binary, fail=True)
-        self.assertFalse((self.root / "publish/bin").exists())
+        self.assertEqual(list((self.root / "publish/bin").iterdir()), [])
         resource.write_text("tutorial-match\n", encoding="ascii")
         built = self.cli("release", binary)
         self.assertEqual(Path(built["entry"]).relative_to(self.root).as_posix(), "publish/bin/v1.0/r1/Search.exe")

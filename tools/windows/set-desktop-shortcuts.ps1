@@ -2,7 +2,8 @@
 param(
     [string]$DesktopDirectory = [Environment]::GetFolderPath('DesktopDirectory'),
     [ValidateRange(1, 65535)][int]$BoardPort = 47361,
-    [ValidateRange(1, 65535)][int]$HandbookPort = 8764
+    [ValidateRange(1, 65535)][int]$HandbookPort = 8764,
+    [ValidateRange(1, 65535)][int]$ChatPort = 47362
 )
 $ErrorActionPreference = 'Stop'
 if (!(Test-Path -LiteralPath $DesktopDirectory -PathType Container)) {
@@ -11,16 +12,18 @@ if (!(Test-Path -LiteralPath $DesktopDirectory -PathType Container)) {
 $definitions = @(
     @{ Name='AgentTeam 技能看板'; Exe='AgentTeamHandbook.exe'; Action='handbook'; Title='打开 AgentTeam 技能手册' },
     @{ Name='Agent Team Board'; Exe='AgentTeamBoard.exe'; Action='board'; Title='打开 Agent Team 项目看板' },
-    @{ Name='AgentTeamStopService'; Exe='AgentTeamStopService.exe'; Action='stop'; Title='停止技能手册和项目看板的后台服务' }
+    @{ Name='AgentTeam 角色通讯'; Exe='AgentTeamChat.exe'; Action='chat'; Title='打开 AgentTeam 角色通讯' },
+    @{ Name='AgentTeamStopService'; Exe='AgentTeamStopService.exe'; Action='stop'; Title='停止项目看板、技能手册和角色通讯的后台服务' }
 )
 $options = @()
 if ($BoardPort -ne 47361) { $options += "-BoardPort $BoardPort" }
 if ($HandbookPort -ne 8764) { $options += "-HandbookPort $HandbookPort" }
+if ($ChatPort -ne 47362) { $options += "-ChatPort $ChatPort" }
 $arguments = $options -join ' '
 $shell = New-Object -ComObject WScript.Shell
 $hostExe = Join-Path $env:SystemRoot 'System32\wscript.exe'
 $legacyVbs = Join-Path $PSScriptRoot 'desktop-services.vbs'
-# Preflight all three destinations before applying any changes.
+# Preflight all destinations before applying any changes.
 $plans = foreach ($def in $definitions) {
     $target = Join-Path $PSScriptRoot $def.Exe
     $icon = Join-Path $PSScriptRoot "icons\agentteam-$($def.Action).ico"
@@ -32,7 +35,8 @@ $plans = foreach ($def in $definitions) {
     $exists = Test-Path -LiteralPath $path
     if ($exists -and $link.TargetPath -ne $target) {
         $olderVbs = $link.TargetPath -eq $hostExe -and $link.Arguments -eq ('//Nologo "' + $legacyVbs + '" ' + $def.Action)
-        $movedCheckout = $link.Description -eq $def.Title -and [IO.Path]::GetFileName($link.TargetPath) -eq $def.Exe
+        $knownDescription = $link.Description -eq $def.Title -or ($def.Action -eq 'stop' -and $link.Description -eq '停止技能手册和项目看板的后台服务')
+        $movedCheckout = $knownDescription -and [IO.Path]::GetFileName($link.TargetPath) -eq $def.Exe
         if (!$olderVbs -and !$movedCheckout) { throw "同名快捷方式指向其他程序：$path" }
     }
     [pscustomobject]@{ Link=$link; Path=$path; Target=$target; Icon="$icon,0"; Title=$def.Title; Exists=$exists }

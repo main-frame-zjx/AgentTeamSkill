@@ -3,11 +3,12 @@
 import json
 import re
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime
 from hashlib import file_digest
 from pathlib import Path
 
 import portable
+import knowledge
 import reports
 import tasks
 from core import (STAGES, Problem, digest, dump, field, git, git_result, inside, now, project,
@@ -28,7 +29,7 @@ def task_snapshot(root, data):
         for task in tasks.role_tasks(root, role).values():
             spec = tasks.effective(task.spec, task.events)
             row = {"id": spec["id"], "title": spec["title"], "role": role["name"],
-                   "stage": STAGES[task.stage], "version": spec.get("version")}
+                   "stage": STAGES[task.stage], "version": spec["version"]}
             if task.stage == 3:
                 review = next((e for e in reversed(task.events) if e["type"] == "move"
                                and e["from"] == STAGES[2] and e["to"] == STAGES[3]), None)
@@ -53,7 +54,7 @@ def check_artifacts(root, data, request, scope):
             rel = path.relative_to(root).as_posix()
             parts = [p.casefold() for p in path.relative_to(root).parts]
             role_metadata = (len(parts) >= 2 and parts[0] in {r["dir"].casefold() for r in data["members"]}
-                             and parts[1] in {"workspace", "agent.md", "memory.md", ".agent"})
+                             and parts[1] in {"workspace", "agent.md", "memory.md", ".memory-state.json", ".agent"})
             require(path.is_file() and path.stat().st_size and not {".git", ".at-state"}.intersection(parts)
                     and rel.casefold() != "at.json" and not role_metadata,
                     f"交付文件不存在、为空或属于管理记录 {rel}")
@@ -91,49 +92,44 @@ def release_kind(request):
     return kind
 
 
-def recorded_kind(record):
-    # Earlier HTML reports carried an audience. They remain accessible at their actual path.
-    return record.get("kind") or {"owner": "dev", "player": "user"}.get(record.get("audience"))
-
-
 def latest_for(records, kind, target):
-    return next((r for r in reversed(records) if recorded_kind(r) == kind and r["version"] == target), None)
+    return next((r for r in reversed(records) if r["kind"] == kind and r["version"] == target), None)
 
 
 def summary(row):
     if not row:
         return None
-    return {"kind": recorded_kind(row), "version": row["version"], "revision": row.get("revision", 1),
+    return {"kind": row["kind"], "version": row["version"], "revision": row["revision"],
             "time": row["time"], "entry": row["entry"]}
 
 
 def check(root, request):
     data = project(root)
-    target = version(request.get("version", data.get("current_version")))
+    target = version(request.get("version", data["current_version"]))
     kind = release_kind(request)
     records = history(root)
     seals = formal_versions(records)
     last = seals[max(seals, key=order)] if seals else None
     seal = seals.get(target)
     latest = latest_for(records, kind, target)
-    revision = latest.get("revision", 1) + 1 if latest else 1
-    rows = task_snapshot(root, data)
-    scope = [r for r in rows if r["version"] == target]
-    baseline = last
-    if kind == "dev":
-        baseline = next((r for r in reversed(records) if recorded_kind(r) == "dev" and
-                         order(r["version"]) <= order(target)), None)
-    changes = [r for r in rows if r.get("review") and r["version"] and order(r["version"]) <= order(target)
-               and (not baseline or instant(r["review"]["time"]) > instant(baseline.get("as_of", baseline["time"])))]
-    changes.sort(key=lambda r: (order(r["version"]), r["review"]["time"], r["id"]))
-    issues = []
-    verified = []
-    counts = {s: sum(r["stage"] == s for r in rows) for s in STAGES}
-    baseline_summary = summary(baseline)
-    if kind != "dev" and seal and seal.get("scope"):
+    revision = latest["revision"] + 1 if latest else 1
+    issues, verified = [], []
+    if kind != "dev" and seal:
         scope, changes, verified = seal["scope"], seal["changes"], seal["artifacts"]
-        baseline_summary = seal["baseline"]
-    elif kind != "dev":
+        counts, baseline_summary = seal["stages"], seal["baseline"]
+    else:
+        rows = task_snapshot(root, data)
+        scope = [r for r in rows if r["version"] == target]
+        baseline = last
+        if kind == "dev":
+            baseline = next((r for r in reversed(records) if r["kind"] == "dev" and
+                             order(r["version"]) <= order(target)), None)
+        changes = [r for r in rows if r.get("review") and order(r["version"]) <= order(target)
+                   and (not baseline or instant(r["review"]["time"]) > instant(baseline["as_of"]))]
+        changes.sort(key=lambda r: (order(r["version"]), r["review"]["time"], r["id"]))
+        counts = {s: sum(r["stage"] == s for r in rows) for s in STAGES}
+        baseline_summary = summary(baseline)
+    if kind != "dev" and not seal:
         if last and order(target) <= order(last["version"]):
             issues.append(f"目标版本 {target} 须高于上次正式发布 {last['version']}")
         if not scope:
@@ -150,7 +146,7 @@ def check(root, request):
     if receipt_path.is_file():
         row = read_json(receipt_path)
         if not any(r["entry"] == row["entry"] for r in records):
-            pending = {"kind": recorded_kind(row), "version": row["version"], "request_id": row.get("request_id")}
+            pending = {"kind": row["kind"], "version": row["version"], "request_id": row["request_id"]}
             if (pending["kind"], pending["version"]) != (kind, target):
                 issues.append(f"请先恢复未完成的发布 {pending['kind']} {pending['version']}")
     if not pending and inside(root, "publish", kind, target, f"r{revision}").exists():
@@ -158,61 +154,14 @@ def check(root, request):
     return {"project": data["name"], "kind": kind, "version": target, "revision": revision,
             "as_of": now(), "latest": summary(latest), "pending": pending, "baseline": baseline_summary,
             "ready": not issues, "issues": issues, "scope": scope, "changes": changes, "artifacts": verified,
-            "unversioned": [r for r in rows if not r["version"]], "stages": counts}
-
-
-def import_baseline(root, request, actor):
-    require(request.get("user_confirmed") is True, "仅可导入用户明确指定的历史正式报告")
-    target = version(field(request, "version"))
-    entry = inside(inside(root, "publish"), field(request, "entry")).resolve()
-    require(entry.is_file() and entry.suffix.lower() == ".html" and entry.stat().st_size,
-            "请选择 publish 中已有的正式报告 HTML 入口")
-    stamp = instant(field(request, "time")).astimezone(timezone.utc)
-    require(stamp <= instant(now()), "历史发布时间不能晚于当前时间")
-    row = {"version": target, "time": stamp.isoformat(), "actor": actor, "imported": True,
-           "entry": entry.relative_to(root).as_posix(), "sha256": file_hash(entry)}
-    past = history(root)
-    if row in past:
-        return row
-    require(not formal_versions(past) and not pending_path(root).exists(), "仅能在首次正式发布前导入一个基线")
-    write(root / ".at-state/releases.json", dump([*past, row]))
-    return row
-
-
-def complete_legacy(root, pending, receipt, past):
-    public = inside(root, "publish")
-    target = receipt["version"]
-    assets, entry = inside(public, target), inside(public, target + ".html")
-    staged_assets, staged_entry = pending / target, pending / "index.html"
-    components = [(staged_assets, assets), (staged_entry, entry)]
-    for source, dest in components:
-        require(source.exists() != dest.exists(), f"发布文件缺失或目标已被占用 {dest}")
-    bundle = staged_assets if staged_assets.exists() else assets
-    page = staged_entry if staged_entry.exists() else entry
-    require(bundle.is_dir() and reports.bundle_files(bundle) == receipt["asset_hashes"] and
-            page.is_file() and file_hash(page) == receipt["entry_sha256"], "发布文件与已核验的快照不符")
-    for source, dest in components:
-        if source.exists():
-            source.rename(dest)
-    record = {**receipt, "time": now()}
-    write(root / ".at-state/releases.json", dump([*past, record]))
-    return record
+            "stages": counts}
 
 
 def saved_result(root, row, existing):
     entry = inside(root, row["entry"])
-    if "files" in row:
-        bundle = inside(root, row["bundle"])
-        require(entry.is_file() and portable.distribution_files(bundle) == row["files"],
-                f"交付物丢失或已修改 {bundle}")
-    else:
-        require(entry.is_file() and file_hash(entry) == row.get("entry_sha256", row.get("sha256")),
-                f"已发布的入口丢失或已修改 {entry}")
-        if "assets" in row:
-            bundle = inside(root, row["assets"])
-            require(bundle.is_dir() and reports.bundle_files(bundle) == row["asset_hashes"], f"素材丢失或已修改 {bundle}")
-        else:
-            bundle = entry.parent
+    bundle = inside(root, row["bundle"])
+    require(entry.is_file() and portable.distribution_files(bundle) == row["files"],
+            f"交付物丢失或已修改 {bundle}")
     return {**summary(row), "entry": str(entry), "bundle": str(bundle), "existing": existing,
             "verification": row.get("verification")}
 
@@ -224,31 +173,28 @@ def content_fingerprint(request):
 
 
 def check_retry(row, fingerprint):
-    require(not fingerprint or not row.get("request_sha256") or row["request_sha256"] == fingerprint,
+    require(not fingerprint or row["request_sha256"] == fingerprint,
             "相同 request_id 的发布内容不同，请使用原输入重试")
 
 
 def finish(root, pending, receipt, past):
-    if "files" not in receipt:
-        row = complete_legacy(root, pending, receipt, past)
-    else:
-        staging = pending / "bundle"
-        final = inside(root, receipt["bundle"])
-        require(staging.is_dir() != final.exists(), f"发布目录缺失或目标已被占用 {final}")
-        require(portable.distribution_files(staging if staging.exists() else final) == receipt["files"],
-                "待恢复的发布文件与快照不符")
-        if staging.exists():
-            final.parent.mkdir(parents=True, exist_ok=True)
-            staging.rename(final)
-        row = {**receipt, "time": now()}
-        write(inside(root, ".at-state", "releases.json"), dump([*past, row]))
+    staging = pending / "bundle"
+    final = inside(root, receipt["bundle"])
+    require(staging.is_dir() != final.exists(), f"发布目录缺失或目标已被占用 {final}")
+    require(portable.distribution_files(staging if staging.exists() else final) == receipt["files"],
+            "待恢复的发布文件与快照不符")
+    if staging.exists():
+        final.parent.mkdir(parents=True, exist_ok=True)
+        staging.rename(final)
+    row = {**receipt, "time": now()}
+    write(inside(root, ".at-state", "releases.json"), dump([*past, row]))
     (pending / "receipt.json").unlink()
     pending.rmdir()
     return saved_result(root, row, False)
 
 
 def release(root, request, actor):
-    target = version(request.get("version", project(root).get("current_version")))
+    target = version(request.get("version", project(root)["current_version"]))
     kind = release_kind(request)
     past = history(root)
     pending = pending_path(root)
@@ -260,15 +206,15 @@ def release(root, request, actor):
         if any(r["entry"] == row["entry"] for r in past):
             receipt_path.unlink()
         else:
-            require((recorded_kind(row), row["version"], row.get("request_id")) == (kind, target, request_id),
-                    f"请先重试未完成的 {recorded_kind(row)} {row['version']}（{row.get('request_id')}）")
+            require((row["kind"], row["version"], row["request_id"]) == (kind, target, request_id),
+                    f"请先重试未完成的 {row['kind']} {row['version']}（{row['request_id']}）")
             check_retry(row, fingerprint)
             return finish(root, pending, row, past)
     if pending.exists():
         pending.rmdir()
     if request_id is not None:
         require(isinstance(request_id, str) and request_id.strip(), "request_id 应为非空文本")
-        prior = next((r for r in past if r.get("request_id") == request_id), None)
+        prior = next((r for r in past if r["request_id"] == request_id), None)
         if prior:
             require((prior["kind"], prior["version"]) == (kind, target), "request_id 已用于其他发布")
             check_retry(prior, fingerprint)
@@ -278,13 +224,13 @@ def release(root, request, actor):
     require(action in (None, "reuse", "new"), "action 应为 reuse 或 new")
     if action == "reuse":
         require(latest, "该类别和版本尚无可沿用的成果")
-        require(request.get("previous_revision", latest.get("revision", 1)) == latest.get("revision", 1),
+        require(request.get("previous_revision", latest["revision"]) == latest["revision"],
                 "最新修订已变化，请重新展示已有成果并确认")
         return saved_result(root, latest, True)
     if latest and action is None:
         return {"needs_choice": True, "latest": summary(latest)}
     if latest or "previous_revision" in request:
-        expected = latest.get("revision", 1) if latest else 0
+        expected = latest["revision"] if latest else 0
         require(type(request.get("previous_revision")) is int and request["previous_revision"] == expected,
                 "最新修订已变化，请重新展示已有成果并确认")
     field(request, "request_id")
@@ -306,6 +252,9 @@ def release(root, request, actor):
             entry = "index.html"
         receipt.update(actor=actor, request_id=request_id, request_sha256=fingerprint,
                        bundle=folder, entry=folder + "/" + entry, files=files)
+        data = project(root)
+        if kind != "dev" and target not in formal_versions(past):
+            receipt.update(knowledge.capture_heads(root, data))
         write(prepared / "receipt.json", dump(receipt))
         prepared.rename(pending)
     return finish(root, pending, receipt, past)

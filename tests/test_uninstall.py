@@ -68,6 +68,21 @@ class Uninstall(unittest.TestCase):
         file.write_text(json.dumps(data), encoding="utf-8")
         return self.cli(command, "--snapshot", file, expected=expected)
 
+    def test_offline_mcp_inventory_and_verify(self):
+        self.host = "codex"
+        self.codex.mkdir()
+        marker = self.codex / "agent-team-chat-install.json"
+        marker.write_text("[]")
+        self.env["PATH"] = str(self.home)
+        self.prepare()
+        for command in ("inventory", "verify"):
+            result = self.inspect(self.view(), command, 2)
+            self.assertEqual(len(result["rows"]), 16)
+            self.assertEqual(result["mcp"], "error")
+            self.assertFalse(result["done"] or result["complete"])
+            self.assertTrue(any("agent-team-chat" in e for e in result["errors"]))
+        self.assertTrue(marker.exists())
+
     def test_evidence_and_shared_flat_entry(self):
         self.shared.mkdir(parents=True)
         flat = self.shared / "at-work.md"
@@ -94,7 +109,7 @@ class Uninstall(unittest.TestCase):
         self.assertFalse(self.inspect({**self.view(), "probes": probes}, "verify", 2)["complete"])
         probes["at-work"] = {"code": "SKILL_NOT_FOUND"}
         result = self.inspect({**self.view(), "probes": probes}, "verify")
-        self.assertEqual(len(result["rows"]), 14)
+        self.assertEqual(len(result["rows"]), 16)
         self.assertTrue(result["done"])
         self.assertTrue(unrelated.exists())
         self.assertFalse(self.cli("apply")["changes"])
@@ -156,7 +171,7 @@ class Uninstall(unittest.TestCase):
         previous = {p: p.read_bytes() for p in source.rglob("SKILL.md")}
         self.prepare("--codex-extra", source)
         initial = self.cli("inventory")
-        self.assertEqual(len(initial["entries"]), 14, initial["errors"])
+        self.assertEqual(len(initial["entries"]), 16, initial["errors"])
         self.assertEqual({e["action"] for e in initial["entries"]}, {"host"})
         self.assertFalse(self.cli("apply")["changes"])
         # Omitting a caller-supplied root locally cannot establish its removal on the calling client.
@@ -169,7 +184,7 @@ class Uninstall(unittest.TestCase):
         dest = self.codex / "skills"
         self.install(dest)
         # Leave just the ten skills shipped before the three additions and the uninstaller.
-        for name in ("at-help", "at-update-team-member", "at-start-board", "at-uninstall"):
+        for name in ("at-help", "at-update-team-member", "at-start-board", "at-uninstall", "at-receive-message", "at-reply-message"):
             (dest / name / "SKILL.md").unlink()
         (self.codex / "config.toml").write_text('[[skills.config]]\nname = "at-work"\nenabled = false\n')
         self.prepare()
@@ -179,8 +194,8 @@ class Uninstall(unittest.TestCase):
         self.assertEqual(len(self.cli("apply")["changes"]), 10)
         self.assertTrue(self.cli("verify")["done"])
         self.install(dest)
-        self.assertEqual(len(self.cli("verify", expected=1)["entries"]), 14)
-        self.assertEqual(len(self.cli("apply")["changes"]), 13)
+        self.assertEqual(len(self.cli("verify", expected=1)["entries"]), 16)
+        self.assertEqual(len(self.cli("apply")["changes"]), 15)
         self.assertEqual([e["name"] for e in self.cli("verify", expected=1)["entries"]], ["at-uninstall"])
         self.assertEqual(self.cli("apply")["changes"][0]["name"], "at-uninstall")
         self.assertTrue(self.cli("verify")["done"])
@@ -222,7 +237,7 @@ class Uninstall(unittest.TestCase):
         paths = {n: dest / n / "SKILL.md" for n in NAMES}
         paths["at-work"] = project / "at-work/SKILL.md"
         self.inspect(snapshot(paths))
-        self.assertEqual(len(self.cli("apply")["changes"]), 13)
+        self.assertEqual(len(self.cli("apply")["changes"]), 15)
         paths = {n: dest / n / "SKILL.md" for n in ("at-work", "at-uninstall")}
         self.inspect(snapshot(paths), "verify", 1)
         self.assertEqual([r["name"] for r in self.cli("apply")["changes"]], ["at-work"])
@@ -232,4 +247,4 @@ class Uninstall(unittest.TestCase):
         self.assertTrue(self.inspect(snapshot({}), "verify")["done"])
         self.assertTrue((other / "SKILL.md").is_file())
         self.install(dest)
-        self.assertEqual(len(self.inspect(snapshot({n: dest/n/"SKILL.md" for n in NAMES}), "verify", 1)["entries"]), 14)
+        self.assertEqual(len(self.inspect(snapshot({n: dest/n/"SKILL.md" for n in NAMES}), "verify", 1)["entries"]), 16)

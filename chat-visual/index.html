@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="icon" href="../tools/windows/icons/agentteam-chat.ico" />
+    <title>角色通讯 · AgentTeam</title>
+    <link rel="stylesheet" href="style.css" />
+    <script defer src="../dev-visual/vendor/markdown-it.min.js"></script>
+    <script defer src="local.js"></script>
+    <script defer src="ui.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <header>
+      <span class="logo" aria-hidden="true">AT</span><strong>角色通讯</strong><span class="divider"></span
+      ><label class="sr" for="project">当前项目</label
+      ><select id="project" aria-label="当前项目">
+        <option>尚未打开项目</option></select
+      ><button id="open">打开项目</button><button id="remove" hidden>从列表移除</button>
+    </header>
+    <main>
+      <div class="heading">
+        <div>
+          <p id="projectName">AgentTeam</p>
+          <h1 id="title">待办总览</h1>
+        </div>
+        <nav aria-label="视图">
+          <button id="inbox" aria-pressed="true">待办总览 <span id="inboxCount">0</span></button
+          ><button id="chat" aria-pressed="false">群聊记录</button>
+        </nav>
+      </div>
+      <div id="unavailable"></div>
+      <div id="warnings" role="status"></div>
+      <div class="toolbar">
+        <input
+          id="search"
+          type="search"
+          aria-label="搜索聊天记录"
+          placeholder="搜索需求、角色、消息或文件"
+        /><select id="role" aria-label="角色视角">
+          <option value="">全部角色</option></select
+        ><select id="status" aria-label="处理状态">
+          <option value="">全部状态</option>
+          <option value="pending">未处理</option>
+          <option value="handled">已处理</option>
+          <option value="partial">部分处理</option></select
+        ><select id="model" aria-label="发送模型">
+          <option value="">全部模型</option></select
+        ><select id="version" aria-label="需求版本">
+          <option value="">全部版本</option></select
+        ><button id="refresh">刷新</button>
+      </div>
+      <div id="content" aria-live="polite"></div>
+    </main>
+    <button id="newMessages" hidden>有新消息 ↓</button>
+    <dialog id="preview" aria-labelledby="fileTitle">
+      <div class="dialoghead"><strong id="fileTitle"></strong><button id="close">关闭</button></div>
+      <p id="fileInfo"></p>
+      <pre id="fileBody"></pre>
+    </dialog>
+  </body>
+</html>

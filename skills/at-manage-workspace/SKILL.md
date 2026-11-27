@@ -5,6 +5,8 @@ description: 查看和维护 Agent Team 需求文件，追加说明、修订验�
 
 # AT_manage_workspace
 
+`note` 和送验 `move` 可附 `candidates` 数组，每项含稳定 `key`、`kind` 和 `topic`。同一需求及 key 标识同一候选。需求变更成功后若有 `pending_memory`，按返回角色恢复记忆刷新。
+
 所有已有需求的修改均用本技能的 Python 入口。一次修改一个需求，写入稳定的事件 key，失败重试沿用同一输入。
 - `list` 接受 `role` 和可选 `stages` 数组；`show` 接受 `role,id`，同时返回原始需求、当前有效条件及全部记录。
 - `note` 接受 `role,id,key,actor,reason`，可记录阻塞、进度和证据。`amend` 另接受 `changes` 对象，允许修订 `goal`、`criteria`、`reviewer`。先了解用户或会议已决定的修改，保留原始规格；编号和负责人固定。

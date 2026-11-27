@@ -47,7 +47,7 @@ const rendered = computed(() => markdown.render(document.value?.text || ''))
       <header class="profile-head"><UserRound :size="20"/><h2>{{ profile.name }}</h2></header>
       <div class="profile-tabs" aria-label="角色详情分类">
         <button :aria-pressed="section === 'agent'" @click="section = 'agent'"><BookOpen :size="15"/>角色档案</button>
-        <button :aria-pressed="section === 'memory'" @click="section = 'memory'"><NotebookPen :size="15"/>短期记忆</button>
+        <button :aria-pressed="section === 'memory'" @click="section = 'memory'"><NotebookPen :size="15"/>工作记忆</button>
         <button :aria-pressed="section === 'tasks'" @click="section = 'tasks'"><ListChecks :size="15"/>负责需求 <b>{{ owned.length }}</b></button>
         <button :aria-pressed="section === 'reports'" @click="section = 'reports'"><ClipboardList :size="15"/>阶段报告 <b>{{ profile.reports.length }}</b></button>
       </div>
@@ -56,7 +56,10 @@ const rendered = computed(() => markdown.render(document.value?.text || ''))
         <ReportList v-else class="role-reports" :reports="profile.reports"/>
       </template>
       <template v-else-if="section !== 'tasks'">
-        <div class="doc-file"><FileText :size="14"/><code>{{ filename }}</code></div>
+        <div class="doc-file">
+          <FileText :size="14"/><code>{{ filename }}</code>
+          <span v-if="section === 'memory' && profile.memoryUsage">{{ profile.memoryUsage.bytes }} / {{ profile.memoryUsage.limit }} 字节</span>
+        </div>
         <p v-if="document?.error" class="role-empty">{{ document.error }}</p>
         <p v-else-if="!document?.text?.trim()" class="role-empty">{{ filename }} 暂无内容</p>
         <div v-else class="role-markdown" v-html="rendered"></div>
@@ -65,8 +68,8 @@ const rendered = computed(() => markdown.render(document.value?.text || ''))
         <section v-for="group in groups" :key="group.stage">
           <h3>{{ group.stage.slice(1) }} <small>{{ group.tasks.length }}</small></h3>
           <button v-for="task in group.tasks" :key="task.id" class="owned-task" @click="emit('openTask', task.id)">
-            <code v-if="task.code">{{ task.code }}</code><span>{{ task.title }}</span>
-            <span v-if="showVersions" class="task-version">{{ task.targetVersion ?? '未绑定版本' }}</span><ChevronRight :size="15"/>
+            <code>{{ task.code }}</code><span>{{ task.title }}</span>
+            <span v-if="showVersions" class="task-version">{{ task.targetVersion }}</span><ChevronRight :size="15"/>
           </button>
           <p v-if="!group.tasks.length" class="muted">暂无需求</p>
         </section>

@@ -23,6 +23,6 @@ description: 在 Agent Team 项目通过逐轮访谈新增角色。只有岗位�
 
 ## 创建成员
 
-把确定的四项分别映射为 `name`、`persona`、`focus`（文本数组）、`workflow`（文本数组），调用 `add-member`。脚本将 `AT_<角色名>/` 建为独立本地 Git 仓库，忽略整个 `repository/`。每个角色的 `report/` 存放本机阶段成果。Git 跟踪目录占位，忽略其中的报告与附件。角色资料首次提交成功后才登记到 `AT.json`。核对角色目录下的 `Agent.md`、`Memory.md`、`.agent/`、`report/.gitkeep`、`workspace/` 的四个状态目录及 `repository/<团队仓库目录名>/` 工作树（取 `AT.json` 的 `team_repo` 最后一段，例如 `tank_war`），以及 Obsidian 中的 `<项目名>/AT_<角色名>/` 和 AT.json 的成员登记。遇到部分完成，用同一份已确认输入重试；如同名成员档案不同，向用户说明冲突。
+把确定的四项分别映射为 `name`、`persona`、`focus`（文本数组）、`workflow`（文本数组），调用 `add-member`。脚本将 `AT_<角色名>/` 建为独立本地 Git 仓库，忽略整个 `repository/`。每个角色的 `report/` 存放本机阶段成果。Git 跟踪目录占位，忽略其中的报告与附件。角色资料首次提交成功后才登记到 `AT.json`。核对角色目录下的 `Agent.md`、六槽位 `Memory.md`、`.memory-state.json`、`.agent/`、`report/.gitkeep`、`workspace/` 的四个状态目录及 `repository/<团队仓库目录名>/` 工作树（取 `AT.json` 的 `team_repo` 最后一段，例如 `tank_war`），以及 Obsidian 个人库中的「系统设计」和「可复用方案」目录。若返回 `pending_navigation`，按提示恢复项目学习导航。遇到部分完成，用同一份已确认输入重试；如同名成员档案不同，向用户说明冲突。
 
 共用入口位于本技能目录的 `../at-init-team/scripts/at.py`。将它解析为绝对路径后，从用户的项目上下文运行 `python -X utf8 "<入口>" <命令> --root "<项目目录>" --input "<UTF-8 JSON文件>"`。只读空输入可省略 `--input`。字段和重试约定见[命令接口](../at-init-team/references/commands.md)。

@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises'
 import { createReadStream } from 'node:fs'
 import { pipeline } from 'node:stream/promises'
 import mime from 'mime-types'
-import { manifest, resolveInside, roleReportRoot, snapshot } from './project.mjs'
+import { manifest, releaseRevision, resolveInside, roleReportRoot, snapshot } from './project.mjs'
 import { registry } from './registry.mjs'
 import { pickFolder } from './picker.mjs'
 
@@ -76,7 +76,16 @@ export async function startBoard({ directory, dist, port, picker = pickFolder })
       }
       root = await roleReportRoot(project.root, directory)
     } else {
-      root = await resolveInside(store.find(scope).root, 'publish')
+      const project = store.find(scope)
+      if ((await manifest(project.root)).id !== project.manifestId || !releaseRevision(...parts.slice(0, 3))) {
+        return json(res, { error: '发布修订不存在' }, 404)
+      }
+      const publicRoot = await resolveInside(project.root, 'publish')
+      const revision = parts.splice(0, 3)
+      root = await resolveInside(publicRoot, ...revision)
+      if (path.relative(path.resolve(publicRoot, ...revision), root)) {
+        return json(res, { error: '发布修订目录已重定向' }, 404)
+      }
     }
     if (!parts.length || parts.at(-1) === '') parts.push('index.html')
     return serveFile(req, res, root, parts)

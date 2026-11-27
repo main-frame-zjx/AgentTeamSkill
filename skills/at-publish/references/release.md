@@ -4,10 +4,10 @@
 
 ## 发现与修订
 
-- `release-check` 接受 `actor, kind, version`。返回 `latest`（该类同版最近修订、发布时间、相对入口）、`revision`（下一修订号）、`pending`、`ready`、`issues`、`scope`、`changes`、`stages`、`unversioned` 和 `artifacts`。这是发布资格检查，具体内容及程序验证记录在生成时校验。
+- `release-check` 接受 `actor, kind, version`。返回 `latest`（该类同版最近修订、发布时间、相对入口）、`revision`（下一修订号）、`pending`、`ready`、`issues`、`scope`、`changes`、`stages` 和 `artifacts`。这是发布资格检查，具体内容及程序验证记录在生成时校验。
 - `kind` 为 `bin`、`user` 或 `dev`。首次正式交付版本的 `bin/user` 须提供 `artifacts`，例如 `[{"task":"<目标版本需求编号>","path":"public/game/maps/tutorial.json"}]`，或 `[{"task":"<需求编号>","commit":"<真实 SHA>"}]`。可用 `repo` 指定项目内独立仓库。团队提交须已进入 main。后续同版交付沿用原验收记录。`dev` 可以在零条归档时发布。
 - 首次 `release` 传唯一的 `request_id`（例如新 UUID）。有已有成果时，先显示 `latest` 并等用户选择。选沿用传 `{"kind":"dev","version":"1.0","actor":"项目负责人","action":"reuse"}`。选新修订时传完整新内容，并加上 `"action":"new","previous_revision":1` 和新的请求编号。修订号已变化时重新展示最新成果。只指定版本与类别遇到已有成果时，命令返回 `needs_choice`。
-- 中断后使用原 `kind, version, request_id` 重试；如果尚未落盘暂存记录，重发完整原请求。成功返回 `entry, bundle, revision, time, existing`。已有旧格式 HTML 继续沿用其原入口。
+- 中断后使用原 `kind, version, request_id` 重试；如果尚未落盘暂存记录，重发完整原请求。成功返回 `entry, bundle, revision, time, existing`。
 
 ## Windows 程序包
 
@@ -61,7 +61,5 @@
 
 | 命令 | 用途 |
 |---|---|
-| `set-iteration` | `{"version":"1.10"}` 设置新需求的默认迭代。 |
+| `set-iteration` | `{"version":"1.10","goal":"完成手柄联机验收"}` 设置默认迭代。可选的单行 `goal` 会显示在角色工作记忆中。 |
 | `authorize-publisher` | 用户明确指定另一个注册岗位承担发布管理后，传 `role, user_confirmed=true`。 |
-| `bind-version` | 管理角色确认历史需求归属后传 `actor, version, reason, items:[{role,id}]`。 |
-| `import-release` | 用户明确指定历史正式报告时，传 `actor, version, entry, time, user_confirmed=true`。入口相对 publish，原发布时间带时区，仅能在尚无正式版本基线时导入。 |

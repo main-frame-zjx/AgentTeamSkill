@@ -1,4 +1,4 @@
 interface:
   display_name: "AT_work"
-  short_description: "让角色按档案选取可做任务，完成自测、团队交付、送验与知识整理。"
+  short_description: "让角色收齐消息、列清单、逐项交付或验收，核销提醒并终检。"
   default_prompt: "请用 $at-work 让指定角色处理本轮可做的任务。"

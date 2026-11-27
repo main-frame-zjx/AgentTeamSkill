@@ -52,6 +52,7 @@ class DesktopShortcutTests(unittest.TestCase):
             self.assertEqual(first, {p.name: p.stat().st_mtime_ns for p in desktop.iterdir()})
             expected = {"AgentTeam 技能看板": ("AgentTeamHandbook.exe", "handbook"),
                         "Agent Team Board": ("AgentTeamBoard.exe", "board"),
+                        "AgentTeam 角色通讯": ("AgentTeamChat.exe", "chat"),
                         "AgentTeamStopService": ("AgentTeamStopService.exe", "stop")}
             rows = json.loads(com("""
                 $links=foreach($item in Get-ChildItem -LiteralPath $env:AT_DESKTOP) {
@@ -104,12 +105,12 @@ class BoardInstallation(unittest.TestCase):
 
     def test_installed_runtime_is_complete_and_repeatable(self):
         self.install()
-        self.assertEqual(len(list(self.dest.glob("at-*/SKILL.md"))), 14)
+        self.assertEqual(len(list(self.dest.glob("at-*/SKILL.md"))), 16)
         manifest = json.loads((self.skill / ".agentteam-install.json").read_text(encoding="utf-8"))
         self.assertEqual(Path(manifest["source_root"]), self.source)
         cli = self.dest / "at-init-team/scripts/at.py"
         output = subprocess.check_output([sys.executable, "-B", str(cli), "help", "--root", str(self.base)])
-        self.assertEqual(len(json.loads(output)["result"]["catalog"]), 14)
+        self.assertEqual(len(json.loads(output)["result"]["catalog"]), 16)
         self.assertTrue((self.board / "package-lock.json").is_file())
         self.assertTrue((self.board / "src/App.vue").is_file())
         self.assertTrue((self.board / "server/start.mjs").is_file())
@@ -121,7 +122,7 @@ class BoardInstallation(unittest.TestCase):
     def test_cold_start_shortcut_restart_reuse_and_port_conflict(self):
         # Build and run from a separate checkout, including its handbook and GUI launchers.
         self.source = self.base / "中文 源码"
-        for folder in ("board", "skills", "dev-visual", "tools/windows"):
+        for folder in ("board", "skills", "chat-visual", "dev-visual", "tools/windows"):
             shutil.copytree(ROOT / folder, self.source / folder,
                             ignore=shutil.ignore_patterns("dist", "node_modules", "__pycache__"))
         shutil.copy2(ROOT / "install.py", self.source)
@@ -130,9 +131,11 @@ class BoardInstallation(unittest.TestCase):
         desktop.mkdir()
         env = dict(os.environ, LOCALAPPDATA=str(self.base / "AppData"),
                    npm_config_cache=str(self.base / "npm-cache"), npm_config_update_notifier="false")
-        with socket.socket() as reserve, socket.socket() as second:
+        with socket.socket() as reserve, socket.socket() as second, socket.socket() as third:
             reserve.bind(("127.0.0.1", 0))
             second.bind(("127.0.0.1", 0))
+            third.bind(("127.0.0.1", 0))
+            chat_port = third.getsockname()[1]
             port = reserve.getsockname()[1]
             handbook_port = second.getsockname()[1]
         script = self.skill / "scripts/start-board.ps1"
@@ -163,23 +166,26 @@ class BoardInstallation(unittest.TestCase):
                         raise
         self.addCleanup(cleanup)
         launch = ["-File", str(script), "-NoBrowser", "-DesktopDirectory", str(desktop),
-                  "-HandbookPort", str(handbook_port), "-Port", str(port)]
+                  "-ChatPort", str(chat_port), "-HandbookPort", str(handbook_port), "-Port", str(port)]
         url = f"http://127.0.0.1:{port}"
         run(launch)
         with urlopen(url, timeout=3) as page:
             self.assertIn(b'id="app"', page.read())
-        self.assertEqual(len(servers), 2)
+        self.assertEqual(len(servers), 3)
         with urlopen(f"http://127.0.0.1:{handbook_port}/api/health", timeout=3) as response:
             handbook_pid = json.load(response)["pid"]
         self.assertIn(handbook_pid, servers)
         self.install()
         run(launch)
-        self.assertEqual(len(servers), 2)
+        self.assertEqual(len(servers), 3)
         self.assertEqual({p.name for p in desktop.iterdir()},
-                         {"Agent Team Board.lnk", "AgentTeam 技能看板.lnk", "AgentTeamStopService.lnk"})
+                         {"Agent Team Board.lnk", "AgentTeam 技能看板.lnk", "AgentTeam 角色通讯.lnk", "AgentTeamStopService.lnk"})
         env["AT_TEST_LINK"] = str(desktop / "Agent Team Board.lnk")
         read_link = "$link=(New-Object -ComObject WScript.Shell).CreateShortcut($env:AT_TEST_LINK); "
-        stop(next(pid for pid in servers if pid != handbook_pid))
+        with urlopen(f"http://127.0.0.1:{chat_port}/api/health", timeout=3) as response:
+            chat = json.load(response)
+            self.assertEqual(chat["app"], "agent-team-chat")
+        stop(next(pid for pid in servers if pid not in (handbook_pid, chat["pid"])))
         # Execute the exact .lnk command line, with browser UI suppressed for the test.
         run(["-Command", read_link + "$p=Start-Process -FilePath $link.TargetPath -ArgumentList "
              "($link.Arguments+' -NoBrowser') -WorkingDirectory $link.WorkingDirectory -WindowStyle Hidden "
@@ -194,3 +200,17 @@ class BoardInstallation(unittest.TestCase):
             other.bind(("127.0.0.1", 0))
             other.listen()
             self.assertIn("in use", run([*launch[:-1], str(other.getsockname()[1])], ok=False))
+        stop(chat["pid"])
+        env["AT_TEST_LINK"] = str(desktop / "AgentTeam 角色通讯.lnk")
+        execute_link = read_link + "$p=Start-Process -FilePath $link.TargetPath -ArgumentList " + (
+            "($link.Arguments+' -NoBrowser') -WorkingDirectory $link.WorkingDirectory -WindowStyle Hidden "
+            "-PassThru; if (!$p.WaitForExit(60000)) { throw 'Desktop launcher did not return' }; exit $p.ExitCode")
+        run(["-Command", execute_link])
+        with urlopen(f"http://127.0.0.1:{chat_port}/api/health", timeout=3) as response:
+            servers.add(json.load(response)["pid"])
+        env["AT_TEST_LINK"] = str(desktop / "AgentTeamStopService.lnk")
+        run(["-Command", execute_link])
+        for service_port in (port, handbook_port, chat_port):
+            with socket.socket() as probe:
+                self.assertNotEqual(probe.connect_ex(("127.0.0.1", service_port)), 0)
+        servers.clear()

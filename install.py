@@ -5,7 +5,9 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import tempfile
+import sys
 
 
 SOURCE = Path(__file__).resolve().parent / "skills"
@@ -85,7 +87,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     home = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex")
     parser.add_argument("--dest", type=Path, default=home / "skills")
+    parser.add_argument("--no-mcp", action="store_true", help="仅安装技能")
+    parser.add_argument("--print-mcp-config", action="store_true", help="输出其他宿主的配置并退出")
+    parser.add_argument("--host", choices=("codex", "other"), help="自定义目标目录所用宿主")
+    args = parser.parse_args()
+    dest = args.dest.resolve()
+    sys.path.insert(0, str(SOURCE / "at-uninstall/scripts"))
+    import chat_registration as chat
     try:
-        install(parser.parse_args().dest.resolve())
+        if args.print_mcp_config:
+            print(json.dumps({"mcpServers": {chat.NAME: chat.config(dest)}}, ensure_ascii=False, indent=2))
+        else:
+            install(dest)
+            if not args.no_mcp and (args.host == "codex" or (args.host is None and dest == (home / "skills").resolve())):
+                if shutil.which("codex"):
+                    chat.register(dest)
+                else:
+                    print("16 项技能已安装。未找到 codex CLI，MCP 尚未注册。安装 CLI 后可重跑安装器，或在宿主中使用以下配置。", file=sys.stderr)
+                    print(json.dumps({"mcpServers": {chat.NAME: chat.config(dest)}}, ensure_ascii=False, indent=2))
     except (ValueError, OSError) as ex:
         parser.exit(1, f"{ex}\n")
